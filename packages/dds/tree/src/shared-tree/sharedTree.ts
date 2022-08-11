@@ -3,14 +3,8 @@
  * Licensed under the MIT License.
  */
 
-import {
-    IChannel,
-    IChannelAttributes,
-    IChannelFactory,
-    IChannelServices,
-    IFluidDataStoreRuntime,
-} from "@fluidframework/datastore-definitions";
-import { DefaultChangeSet, DefaultRebaser, ForestIndex, ObjectForest, SchemaIndex } from "../feature-libraries";
+import { IChannelAttributes, IFluidDataStoreRuntime } from "@fluidframework/datastore-definitions";
+import { DefaultChangeFamily, DefaultChangeSet, ForestIndex, ObjectForest, SchemaIndex } from "../feature-libraries";
 import { Index, SharedTreeCore } from "../shared-tree-core";
 import { AnchorSet } from "../tree";
 
@@ -20,7 +14,7 @@ import { AnchorSet } from "../tree";
  *
  * TODO: detail compatibility requirements.
  */
-export class SharedTree extends SharedTreeCore<DefaultRebaser> {
+export class SharedTree extends SharedTreeCore<DefaultChangeSet, DefaultChangeFamily> {
     public constructor(
         id: string,
         runtime: IFluidDataStoreRuntime,
@@ -34,7 +28,7 @@ export class SharedTree extends SharedTreeCore<DefaultRebaser> {
             ];
             super(
                 indexes,
-                new DefaultRebaser(), anchors, id, runtime, attributes, telemetryContextPrefix,
+                new DefaultChangeFamily(), anchors, id, runtime, attributes, telemetryContextPrefix,
                 );
 
             // Could save a reference to this to allow use as part of a default checkout.
