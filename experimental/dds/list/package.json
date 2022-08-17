@@ -43,6 +43,7 @@
     "@fluidframework/datastore-definitions": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/protocol-definitions": "^1.0.0",
     "@fluidframework/runtime-definitions": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
+    "@fluidframework/runtime-utils": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/shared-object-base": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/telemetry-utils": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0"
   },
@@ -54,7 +55,6 @@
     "@fluidframework/container-runtime": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/eslint-config-fluid": "^0.28.2000",
     "@fluidframework/mocha-test-setup": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
-    "@fluidframework/runtime-utils": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/test-driver-definitions": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/test-drivers": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",
     "@fluidframework/test-runtime-utils": ">=2.0.0-internal.1.1.0 <2.0.0-internal.2.0.0",

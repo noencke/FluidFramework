@@ -5,7 +5,7 @@
         "path": "../../../../"
       },
       {
-        "name": "@fluid-internal/tree",
+        "name": "@fluid-internal/list",
         "path": ".."
       }
     ],
