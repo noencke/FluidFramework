@@ -75,6 +75,7 @@ export interface IndexEvents<TChangeset> {
 export class SharedTreeCore<
     TChange,
     TChangeFamily extends ChangeFamily<any, TChange>,
+    TIndexes extends Index[],
 > extends SharedObject<TransformEvents<ISharedTreeCoreEvents, ISharedObjectEvents>> {
     /**
      * A random ID that uniquely identifies this client in the collab session.
@@ -101,6 +102,8 @@ export class SharedTreeCore<
      */
     private readonly indexEventEmitter = EventEmitter.create<IndexEvents<TChange>>();
 
+    protected readonly indexes: TIndexes;
+
     /**
      * @param indexes - A list of indexes, either as an array or as a factory function
      * @param changeFamily - The change family
@@ -112,7 +115,7 @@ export class SharedTreeCore<
      * @param telemetryContextPrefix - the context for any telemetry logs/errors emitted
      */
     public constructor(
-        indexes: Index[] | ((events: IEventEmitter<IndexEvents<TChange>>) => Index[]),
+        indexes: TIndexes | ((events: IEventEmitter<IndexEvents<TChange>>) => TIndexes),
         public readonly changeFamily: TChangeFamily,
         public readonly editManager: EditManager<TChange, TChangeFamily>,
         anchors: AnchorSet,
@@ -127,7 +130,8 @@ export class SharedTreeCore<
 
         this.stableId = uuid();
         editManager.initSessionId(this.stableId);
-        this.summaryElements = (Array.isArray(indexes) ? indexes : indexes(this.indexEventEmitter))
+        this.indexes = Array.isArray(indexes) ? indexes : indexes(this.indexEventEmitter);
+        this.summaryElements = this.indexes
             .map((i) => i.summaryElement)
             .filter((e): e is SummaryElement => e !== undefined);
         assert(

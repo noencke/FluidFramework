@@ -25,6 +25,7 @@ import {
     AnchorSet,
     UpPath,
     EditManager,
+    GlobalFieldKey,
 } from "../core";
 import {
     defaultSchemaPolicy,
@@ -43,7 +44,10 @@ import {
     runSynchronousTransaction,
     buildForest,
     ContextuallyTypedNodeData,
+    IdentifierIndex,
+    ModularChangeset,
 } from "../feature-libraries";
+import { brand } from "../util";
 
 /**
  * Collaboratively editable tree distributed data-structure,
@@ -95,6 +99,8 @@ export interface ISharedTree extends ICheckout<IDefaultEditBuilder>, ISharedObje
     readonly storedSchema: StoredSchemaRepository;
 }
 
+export const identifierFieldKey: GlobalFieldKey = brand("identifier");
+
 /**
  * Shared tree, configured with a good set of indexes and field kinds which will maintain compatibility over time.
  * TODO: node identifier index.
@@ -103,7 +109,16 @@ export interface ISharedTree extends ICheckout<IDefaultEditBuilder>, ISharedObje
  * TODO: expose or implement Checkout.
  */
 class SharedTree
-    extends SharedTreeCore<DefaultChangeset, DefaultChangeFamily>
+    extends SharedTreeCore<
+        DefaultChangeset,
+        DefaultChangeFamily,
+        [
+            SchemaIndex,
+            ForestIndex,
+            EditManagerIndex<ModularChangeset, DefaultChangeFamily>,
+            IdentifierIndex<typeof identifierFieldKey>,
+        ]
+    >
     implements ISharedTree
 {
     public readonly context: EditableTreeContext;
@@ -129,11 +144,14 @@ class SharedTree
             anchors,
         );
         super(
-            (events) => [
-                new SchemaIndex(runtime, events, schema),
-                new ForestIndex(runtime, events, forest),
-                new EditManagerIndex(runtime, editManager),
-            ],
+            (events) => {
+                return [
+                    new SchemaIndex(runtime, events, schema),
+                    new ForestIndex(runtime, events, forest),
+                    new EditManagerIndex(runtime, editManager),
+                    new IdentifierIndex(events, forest, identifierFieldKey),
+                ];
+            },
             defaultChangeFamily,
             editManager,
             anchors,
@@ -157,6 +175,10 @@ class SharedTree
     public locate(anchor: Anchor): UpPath | undefined {
         assert(this.editManager.anchors !== undefined, 0x407 /* editManager must have anchors */);
         return this.editManager.anchors?.locate(anchor);
+    }
+
+    findNode(identifier: number): Anchor | undefined {
+        return this.indexes[3].getNode(identifier);
     }
 
     public get root(): UnwrappedEditableField {

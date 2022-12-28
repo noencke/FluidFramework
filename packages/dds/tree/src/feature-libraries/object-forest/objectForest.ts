@@ -216,8 +216,7 @@ class ObjectForest extends SimpleDependee implements IEditableForest {
         if (path === undefined) {
             return TreeNavigationResult.NotFound;
         }
-        this.moveCursorToPath(path, cursorToMove);
-        return TreeNavigationResult.Ok;
+        return this.tryMoveCursorToPath(path, cursorToMove);
     }
 
     tryMoveCursorToField(
@@ -225,7 +224,10 @@ class ObjectForest extends SimpleDependee implements IEditableForest {
         cursorToMove: ITreeSubscriptionCursor,
     ): TreeNavigationResult {
         if (destination.parent === undefined) {
-            this.moveCursorToPath(undefined, cursorToMove);
+            const result = this.tryMoveCursorToPath(undefined, cursorToMove);
+            if (result !== TreeNavigationResult.Ok) {
+                return result;
+            }
         } else {
             const result = this.tryMoveCursorToNode(destination.parent, cursorToMove);
             if (result !== TreeNavigationResult.Ok) {
@@ -241,7 +243,10 @@ class ObjectForest extends SimpleDependee implements IEditableForest {
      * This is NOT a relative move: current position is discarded.
      * Path must point to existing node.
      */
-    moveCursorToPath(destination: UpPath | undefined, cursorToMove: ITreeSubscriptionCursor): void {
+    tryMoveCursorToPath(
+        destination: UpPath | undefined,
+        cursorToMove: ITreeSubscriptionCursor,
+    ): TreeNavigationResult {
         assert(
             cursorToMove instanceof Cursor,
             0x337 /* ObjectForest must only be given its own Cursor type */,
@@ -268,7 +273,7 @@ class ObjectForest extends SimpleDependee implements IEditableForest {
             cursorToMove.enterNode(indexStack.pop()!);
         }
 
-        return;
+        return TreeNavigationResult.Ok;
     }
 }
 

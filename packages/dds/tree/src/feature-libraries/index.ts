@@ -98,6 +98,8 @@ export {
     stringifySummary as encodeSummary,
 } from "./editManagerIndex";
 
+export { IdentifierIndex } from "./identifierIndex";
+
 export { ForestRepairDataStore } from "./forestRepairDataStore";
 export { dummyRepairDataStore } from "./fakeRepairDataStore";
 

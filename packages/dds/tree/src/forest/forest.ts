@@ -14,6 +14,7 @@ import {
     FieldKey,
     ITreeCursor,
     rootField,
+    UpPath,
 } from "../tree";
 import type { IEditableForest } from "./editableForest";
 
@@ -73,6 +74,15 @@ export interface IForestSubscription extends Dependee {
      */
     tryMoveCursorToField(
         destination: FieldAnchor,
+        cursorToMove: ITreeSubscriptionCursor,
+    ): TreeNavigationResult;
+
+    /**
+     * It is an error not to free `cursorToMove` before the next edit.
+     * Must provide a `cursorToMove` from this subscription (acquired via `allocateCursor`).
+     */
+    tryMoveCursorToPath(
+        destination: UpPath,
         cursorToMove: ITreeSubscriptionCursor,
     ): TreeNavigationResult;
 }

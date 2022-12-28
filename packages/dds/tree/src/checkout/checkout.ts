@@ -3,6 +3,7 @@
  * Licensed under the MIT License.
  */
 
+import { Anchor } from "../core";
 import { IForestSubscription } from "../forest";
 
 export interface ICheckout<TEditBuilder> {
@@ -25,6 +26,12 @@ export interface ICheckout<TEditBuilder> {
     runTransaction(
         transaction: (forest: IForestSubscription, editor: TEditBuilder) => TransactionResult,
     ): TransactionResult;
+
+    /**
+     * TODO: doc or move
+     * @param identifier - TODO
+     */
+    findNode(identifier: number): Anchor | undefined;
 }
 
 export enum TransactionResult {

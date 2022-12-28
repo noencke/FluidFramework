@@ -481,6 +481,7 @@ interface HasTiebreakPolicy extends HasPlaceFields {
 
 // @public (undocumented)
 export interface ICheckout<TEditBuilder> {
+    findNode(identifier: number): Anchor | undefined;
     readonly forest: IForestSubscription;
     runTransaction(transaction: (forest: IForestSubscription, editor: TEditBuilder) => TransactionResult): TransactionResult;
 }
@@ -514,6 +515,7 @@ export interface IForestSubscription extends Dependee {
     readonly schema: StoredSchemaRepository;
     tryMoveCursorToField(destination: FieldAnchor, cursorToMove: ITreeSubscriptionCursor): TreeNavigationResult;
     tryMoveCursorToNode(destination: Anchor, cursorToMove: ITreeSubscriptionCursor): TreeNavigationResult;
+    tryMoveCursorToPath(destination: UpPath, cursorToMove: ITreeSubscriptionCursor): TreeNavigationResult;
 }
 
 // @public
