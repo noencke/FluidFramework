@@ -61,6 +61,8 @@ export interface IForkedCheckout<TChange> extends ICheckout<TChange> {
 	isDisposed(): boolean;
 }
 
+// TODO: OpenEdit/CLoseEdit (which squashes)
+
 export class ForkedCheckout<TChange, TIndexes> implements IForkedCheckout<TChange> {
 	private branch: GraphCommit<TChange>;
 	private readonly rebaser: Rebaser<TChange>;

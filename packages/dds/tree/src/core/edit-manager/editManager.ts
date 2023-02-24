@@ -6,8 +6,8 @@
 import BTree from "sorted-btree";
 import { assert } from "@fluidframework/common-utils";
 import { ChangeFamily } from "../change-family";
-import { SimpleDependee } from "../dependency-tracking";
-import { AnchorSet, Delta, emptyDelta } from "../tree";
+import { Dependent, SimpleDependee } from "../dependency-tracking";
+import { AnchorSet, Delta, emptyDelta, ITreeCursorSynchronous } from "../tree";
 import {
 	brand,
 	Brand,
@@ -28,7 +28,8 @@ import {
 	Rebaser,
 	assertIsRevisionTag,
 } from "../rebase";
-import { ICheckout, IForkedCheckout } from "../checkout";
+import { ForkedCheckout, ICheckout, IForkedCheckout } from "../checkout";
+import { StableId } from "../../id-compressor";
 
 export interface Commit<TChangeset> extends Omit<GraphCommit<TChangeset>, "parent"> {}
 export type SeqNumber = Brand<number, "edit-manager.SeqNumber">;
@@ -36,15 +37,110 @@ export const minimumPossibleSequenceNumber: SeqNumber = brand(Number.MIN_SAFE_IN
 
 const nullRevisionTag = assertIsRevisionTag("00000000-0000-4000-8000-000000000000");
 
+export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TChangeset>> {
+	private readonly peerRebaser: PeerRebaser<TChangeset, TChangeFamily>;
+
+	private localCheckout?: IForkedCheckout<TChangeset>;
+
+	public constructor(changeFamily: TChangeFamily, anchors?: AnchorSet) {
+		this.peerRebaser = new PeerRebaser(changeFamily, anchors);
+	}
+
+	public get computationName(): string {
+		return this.peerRebaser.computationName;
+	}
+	public registerDependent(dependent: Dependent): boolean {
+		return this.peerRebaser.registerDependent(dependent);
+	}
+	public removeDependent(dependent: Dependent): void {
+		return this.peerRebaser.removeDependent(dependent);
+	}
+	applyChange(change: TChangeset): void {
+		return this.peerRebaser.applyChange(change);
+	}
+	fork(): IForkedCheckout<TChangeset> {
+		return this.peerRebaser.fork();
+	}
+	merge(fork: IForkedCheckout<TChangeset>): void {
+		return this.peerRebaser.merge(fork);
+	}
+	public advanceMinimumSequenceNumber(minimumSequenceNumber: SeqNumber): void {
+		return this.peerRebaser.advanceMinimumSequenceNumber(minimumSequenceNumber);
+	}
+	public initSessionId(id: string): void {
+		this.localCheckout = new ForkedCheckout(
+			() => this.peerRebaser.getTrunkBranch(),
+			id,
+			this.peerRebaser.changeFamily,
+			undefined,
+			() => undefined,
+		);
+		return this.peerRebaser.initSessionId(id);
+	}
+	public isEmpty(): boolean {
+		return this.peerRebaser.isEmpty();
+	}
+	public getSummaryData(): SummaryData<TChangeset> {
+		return this.peerRebaser.getSummaryData();
+	}
+	public loadSummaryData(data: SummaryData<TChangeset>): void {
+		return this.peerRebaser.loadSummaryData(data);
+	}
+
+	public getTrunk(): readonly RecursiveReadonly<Commit<TChangeset>>[] {
+		return getPathFromBase(this.peerRebaser.getTrunkBranch(), this.trunkBase);
+	}
+	public getLastSequencedChange(): TChangeset {
+		return (this.getLastCommit() ?? fail("No sequenced changes")).change;
+	}
+	public getLastCommit(): Commit<TChangeset> | undefined {
+		return this.peerRebaser.getTrunkBranch();
+	}
+	public getLocalBranch(): GraphCommit<TChangeset> {
+		return this.localCheckout?.getBranch() ?? this.peerRebaser.getTrunkBranch();
+	}
+	public getLocalChanges(): readonly RecursiveReadonly<TChangeset>[] {
+		if (this.localCheckout === undefined) {
+			return [];
+		}
+
+		return getPathFromBase(
+			this.localCheckout.getBranch(),
+			this.peerRebaser.getTrunkBranch(),
+		).map((c) => c.change);
+	}
+
+	public addSequencedChange(
+		newCommit: Commit<TChangeset>,
+		sequenceNumber: SeqNumber,
+		referenceSequenceNumber: SeqNumber,
+	): Delta.Root<ITreeCursorSynchronous> {
+		return this.peerRebaser.addSequencedChange(
+			newCommit,
+			sequenceNumber,
+			referenceSequenceNumber,
+		);
+	}
+	public addLocalChange(
+		revision: StableId,
+		change: TChangeset,
+	): Delta.Root<ITreeCursorSynchronous> {
+		return this.peerRebaser.addLocalChange(revision, change);
+	}
+	public fastForwardLocalBranch(newHead: GraphCommit<TChangeset>): TChangeset {
+		return this.peerRebaser.fastForwardLocalBranch(newHead);
+	}
+}
+
 /**
  * Represents a local branch of a document and interprets the effect on the document of adding sequenced changes,
  * which were based on a given session's branch, to the document history
  */
 // TODO: Try to reduce this to a single type parameter
-export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TChangeset>>
-	extends SimpleDependee
-	implements ICheckout<TChangeset>
-{
+class PeerRebaser<
+	TChangeset,
+	TChangeFamily extends ChangeFamily<any, TChangeset>,
+> extends SimpleDependee {
 	/**
 	 * The head commit of the "trunk" branch. The trunk represents the list of received sequenced changes.
 	 */
@@ -62,7 +158,7 @@ export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TCh
 	 */
 	private localBranch: GraphCommit<TChangeset>;
 
-	private localSessionId?: SessionId;
+	public localSessionId?: SessionId;
 
 	private minimumSequenceNumber: number = -1;
 
@@ -95,18 +191,6 @@ export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TCh
 		};
 		this.trunk = this.trunkBase;
 		this.localBranch = this.trunk;
-	}
-
-	applyChange(change: TChangeset): void {
-		throw new Error("Method not implemented.");
-	}
-
-	fork(): IForkedCheckout<TChangeset> {
-		throw new Error("Method not implemented.");
-	}
-
-	merge(fork: IForkedCheckout<TChangeset>): void {
-		throw new Error("Method not implemented.");
 	}
 
 	/**
@@ -235,15 +319,10 @@ export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TCh
 		}
 	}
 
-	public getTrunk(): readonly RecursiveReadonly<Commit<TChangeset>>[] {
-		return getPathFromBase(this.trunk, this.trunkBase);
-	}
-
-	public getLastSequencedChange(): TChangeset {
-		return (this.getLastCommit() ?? fail("No sequenced changes")).change;
-	}
-
-	public getLastCommit(): Commit<TChangeset> | undefined {
+	/**
+	 * @returns the head commit of the trunk
+	 */
+	public getTrunkBranch(): GraphCommit<TChangeset> {
 		return this.trunk;
 	}
 
@@ -252,10 +331,6 @@ export class EditManager<TChangeset, TChangeFamily extends ChangeFamily<any, TCh
 	 */
 	public getLocalBranch(): GraphCommit<TChangeset> {
 		return this.localBranch;
-	}
-
-	public getLocalChanges(): readonly RecursiveReadonly<TChangeset>[] {
-		return getPathFromBase(this.localBranch, this.trunk).map((c) => c.change);
 	}
 
 	public addSequencedChange(
