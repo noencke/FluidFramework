@@ -25,6 +25,9 @@ import {
 	EditManager,
 	IEditableForest,
 	SharedTreeBranch,
+	GraphCommit,
+	findAncestor,
+	RevisionTag,
 } from "../core";
 import { SharedTreeCore } from "../shared-tree-core";
 import {
@@ -45,7 +48,9 @@ import {
 	ContextuallyTypedNodeData,
 	ModularChangeset,
 	IDefaultEditBuilder,
+	ForestRepairDataStore,
 } from "../feature-libraries";
+import { fail } from "../util";
 
 /**
  * Provides a means for interacting with a SharedTree.
@@ -100,6 +105,11 @@ export interface ISharedTreeCheckout extends AnchorLocator {
 	 * Use `runTransaction` to create a local edit.
 	 */
 	readonly forest: IForestSubscription;
+
+	editor: IDefaultEditBuilder;
+	beginTransaction(): void;
+	commitTransaction(): void;
+	abortTransaction(): void;
 
 	/**
 	 * Run `transaction` to edit this forest.
@@ -171,13 +181,16 @@ class SharedTree
 	implements ISharedTree
 {
 	public readonly context: EditableTreeContext;
-	public readonly forest: IForestSubscription;
+	public readonly forest: IEditableForest;
 	public readonly storedSchema: SchemaEditor<InMemoryStoredSchemaRepository>;
 	/**
 	 * Rather than implementing TransactionCheckout, have a member that implements it.
 	 * This allows keeping the `IEditableForest` private.
 	 */
 	private readonly transactionCheckout: TransactionCheckout<DefaultEditBuilder, DefaultChangeset>;
+	/** A stack of transactions */
+	private readonly transactions: GraphCommit<DefaultChangeset>[] = [];
+	public readonly editor: IDefaultEditBuilder;
 
 	public constructor(
 		id: string,
@@ -216,6 +229,53 @@ class SharedTree
 		};
 
 		this.context = getEditableTreeContext(forest, this.transactionCheckout);
+		this.editor = this.changeFamily.buildEditor((change) => {}, this.forest.anchors);
+	}
+
+	beginTransaction(): void {
+		this.transactions.push(this.editManager.getLocalBranch());
+	}
+
+	commitTransaction(): void {
+		const commits = this.rollbackTransaction();
+		const edit = this.changeFamily.rebaser.compose(commits);
+		this.submitEdit(edit);
+	}
+
+	abortTransaction(): void {
+		this.rollbackTransaction();
+	}
+
+	private rollbackTransaction(): GraphCommit<DefaultChangeset>[] {
+		const start = this.transactions.pop() ?? fail("No ongoing transaction to commit");
+		const commits: GraphCommit<DefaultChangeset>[] = [];
+		assert(
+			findAncestor([this.editManager.getLocalBranch(), commits], (c) => c === start) !==
+				undefined,
+			"Expected starting transaction commit to be ancestor of local branch",
+		);
+
+		// These revision numbers are solely used within the scope of this transaction for the purpose of
+		// populating and querying the repair data store. Both the revision numbers and the repair data
+		// are scoped to this transaction.
+		const revisions: RevisionTag[] = [];
+		// TODO repair store needs to be a field I think
+		const repairStore = new ForestRepairDataStore((revision: RevisionTag) => {
+			assert(
+				revision === revisions[revisions.length - 1],
+				0x479 /* The repair data store should only ask for the current forest state */,
+			);
+			return this.forest;
+		});
+
+		// TODO: you already walk backwards to generate `commits`, could leverage that and get rid of the `reverse` here
+		const inverseChanges = commits.map((c) => this.changeFamily.rebaser.invert(c)).reverse();
+		for (const inverse of inverseChanges) {
+			this.changeFamily.rebaser.rebaseAnchors(this.forest.anchors, inverse);
+			this.forest.applyDelta(this.changeFamily.intoDelta(inverse, repairStore));
+		}
+
+		return commits;
 	}
 
 	public locate(anchor: Anchor): UpPath | undefined {
