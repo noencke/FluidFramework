@@ -826,6 +826,31 @@ describe("SharedTree", () => {
 			assert.equal(opsReceived, 2);
 		});
 
+		it("update anchors after merging into the root checkout", async () => {
+			// tODO
+		});
+
+		it("update anchors in in forks", async () => {
+			const provider = await TestTreeProvider.create(1);
+			const [tree] = provider.trees;
+			const checkout = tree.fork();
+			pushTestValue(checkout, "A");
+			let cursor = checkout.forest.allocateCursor();
+			moveToDetachedField(checkout.forest, cursor);
+			cursor.firstNode();
+			const anchor = cursor.buildAnchor();
+			cursor.clear();
+			pushTestValue(checkout, "B");
+			cursor = checkout.forest.allocateCursor();
+			checkout.forest.tryMoveCursorToNode(anchor, cursor);
+			assert.equal(cursor.value, "B");
+			cursor.clear();
+		});
+
+		it("update anchors after merging into a base checkout", async () => {
+			// tODO
+		});
+
 		it("are disposed after merging", async () => {
 			const provider = await TestTreeProvider.create(1);
 			const [tree] = provider.trees;
