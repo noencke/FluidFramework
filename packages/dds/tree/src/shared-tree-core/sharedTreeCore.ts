@@ -296,9 +296,13 @@ export class SharedTreeCore<
 
 	public abortTransaction(): void {
 		const { startRevision, repairStore } = this.transactions.pop();
-		for (const delta of this.editManager.rollbackLocalChanges(startRevision, repairStore)) {
-			this.indexEventEmitter.emit("newLocalState", delta);
-		}
+		this.indexEventEmitter.emit(
+			"newLocalState",
+			this.editManager.rollbackLocalChanges(startRevision, repairStore),
+		);
+		// for (const delta of this.editManager.rollbackLocalChanges(startRevision, repairStore)) {
+		// 	this.indexEventEmitter.emit("newLocalState", delta);
+		// }
 	}
 
 	public isTransacting(): boolean {

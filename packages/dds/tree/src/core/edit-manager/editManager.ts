@@ -29,6 +29,8 @@ import {
 	assertIsRevisionTag,
 	mintRevisionTag,
 	tagChange,
+	TaggedChange,
+	tagInverse,
 } from "../rebase";
 import { ReadonlyRepairDataStore } from "../repair";
 
@@ -331,13 +333,14 @@ export class EditManager<
 	 * @param repairStore - an optional repair data store to assist with generating inverses of the removed commits
 	 * @returns an iterator of deltas where each delta describes the change from rolling back one of the removed commits.
 	 */
-	public *rollbackLocalChanges(
+	public rollbackLocalChanges(
 		startRevision: RevisionTag,
 		repairStore?: ReadonlyRepairDataStore,
-	): Iterable<Delta.Root> {
+	): Delta.Root {
 		const [rollbackTo, commits] = this.findLocalCommit(startRevision);
 		this.localBranch = rollbackTo;
 
+		const inverses: TaggedChange<TChangeset>[] = [];
 		for (let i = commits.length - 1; i >= 0; i--) {
 			const { change, revision } = commits[i];
 			if (this.anchors !== undefined) {
@@ -347,8 +350,11 @@ export class EditManager<
 				tagChange(change, revision),
 				repairStore,
 			);
-			yield this.changeFamily.intoDelta(inverse);
+
+			inverses.push(tagInverse(inverse, revision));
+			// yield this.changeFamily.intoDelta(inverse);
 		}
+		return this.changeFamily.intoDelta(this.changeFamily.rebaser.compose(inverses));
 	}
 
 	private findLocalCommit(
