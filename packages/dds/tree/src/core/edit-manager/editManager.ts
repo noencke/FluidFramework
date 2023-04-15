@@ -33,8 +33,17 @@ import {
 } from "../rebase";
 import { ReadonlyRepairDataStore } from "../repair";
 
-export interface Commit<TChangeset> extends Omit<GraphCommit<TChangeset>, "parent"> {}
 export type SeqNumber = Brand<number, "edit-manager.SeqNumber">;
+export interface Commit<TChangeset> extends Omit<GraphCommit<TChangeset>, "parent"> {}
+// These are serialized into the summary
+export interface SequencedCommit<TChangeset> extends Commit<TChangeset> {
+	sequenceNumber: SeqNumber;
+}
+// These are used specifically for the trunk branch; each has a sequence number unlike local commits
+interface TrunkCommit<TChangeset> extends SequencedCommit<TChangeset> {
+	parent?: TrunkCommit<TChangeset>;
+}
+
 export const minimumPossibleSequenceNumber: SeqNumber = brand(Number.MIN_SAFE_INTEGER);
 
 const nullRevisionTag = assertIsRevisionTag("00000000-0000-4000-8000-000000000000");
@@ -51,7 +60,7 @@ export class EditManager<
 	/**
 	 * The head commit of the "trunk" branch. The trunk represents the list of received sequenced changes.
 	 */
-	private trunk: GraphCommit<TChangeset>;
+	private trunk: TrunkCommit<TChangeset>;
 
 	/**
 	 * Branches are maintained to represent the local change list that the issuing client had
@@ -72,14 +81,14 @@ export class EditManager<
 	/**
 	 * A map from a sequence number to the commit in the trunk which has that sequence number
 	 */
-	private readonly sequenceMap = new BTree<SeqNumber, GraphCommit<TChangeset>>();
+	private readonly sequenceMap = new BTree<SeqNumber, TrunkCommit<TChangeset>>();
 
 	/**
 	 * An immutable "origin" commit singleton on which the trunk is based.
 	 * This makes it possible to model the trunk in the same way as any other branch
 	 * (it branches off of a base commit) which simplifies some logic.
 	 */
-	private readonly trunkBase: GraphCommit<TChangeset>;
+	private readonly trunkBase: TrunkCommit<TChangeset>;
 
 	public constructor(
 		public readonly changeFamily: TChangeFamily,
@@ -93,6 +102,7 @@ export class EditManager<
 			revision: nullRevisionTag,
 			sessionId: "",
 			change: changeFamily.rebaser.compose([]),
+			sequenceNumber: minimumPossibleSequenceNumber,
 		};
 		this.trunk = this.trunkBase;
 		this.localBranch = this.trunk;
@@ -192,8 +202,8 @@ export class EditManager<
 
 	public loadSummaryData(data: SummaryData<TChangeset>): void {
 		this.sequenceMap.clear();
-		this.trunk = data.trunk.reduce((base, c) => {
-			const commit = mintCommit(base, c);
+		this.trunk = data.trunk.reduce<TrunkCommit<TChangeset>>((base, c) => {
+			const commit = mintTrunkCommit(base, c);
 			this.sequenceMap.set(c.sequenceNumber, commit);
 			return commit;
 		}, this.trunkBase);
@@ -367,7 +377,7 @@ export class EditManager<
 	}
 
 	private pushToTrunk(sequenceNumber: SeqNumber, commit: Commit<TChangeset>): void {
-		this.trunk = mintCommit(this.trunk, commit);
+		this.trunk = mintTrunkCommit(this.trunk, commit, sequenceNumber);
 		this.sequenceMap.set(sequenceNumber, this.trunk);
 	}
 
@@ -393,10 +403,6 @@ export class EditManager<
 
 		return netChange;
 	}
-}
-
-export interface SequencedCommit<TChangeset> extends Commit<TChangeset> {
-	sequenceNumber: SeqNumber;
 }
 
 /**
@@ -428,4 +434,28 @@ function getPathFromBase<TChange>(
 		0x573 /* Expected branches to be related */,
 	);
 	return path;
+}
+
+function mintTrunkCommit<TChange>(
+	parent: TrunkCommit<TChange>,
+	commit: Commit<TChange>,
+	sequenceNumber: SeqNumber,
+): TrunkCommit<TChange>;
+function mintTrunkCommit<TChange>(
+	parent: TrunkCommit<TChange>,
+	commit: SequencedCommit<TChange>,
+): TrunkCommit<TChange>;
+function mintTrunkCommit<TChange>(
+	parent: TrunkCommit<TChange>,
+	commit: Commit<TChange> | SequencedCommit<TChange>,
+	sequenceNumber?: SeqNumber,
+): TrunkCommit<TChange> {
+	const { revision, sessionId, change } = commit;
+	return {
+		revision,
+		sessionId,
+		change,
+		parent,
+		sequenceNumber: sequenceNumber ?? (commit as SequencedCommit<TChange>).sequenceNumber,
+	};
 }
