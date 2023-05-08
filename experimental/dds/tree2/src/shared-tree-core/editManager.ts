@@ -68,11 +68,7 @@ export interface EditManagerEvents<TChangeset> {
  * which were based on a given session's branch, to the document history
  */
 // TODO: Try to reduce this to a single type parameter
-export class EditManager<
-		TEditor extends ChangeFamilyEditor,
-		TChangeset,
-		TChangeFamily extends ChangeFamily<TEditor, TChangeset>,
-	>
+export class EditManager<TEditor extends ChangeFamilyEditor, TChangeset>
 	extends SimpleDependee
 	implements ISubscribable<EditManagerEvents<TChangeset>>
 {
@@ -133,7 +129,7 @@ export class EditManager<
 	 * @param trunkUndoRedoManager - the {@link UndoRedoManager} associated with the trunk.
 	 */
 	public constructor(
-		public readonly changeFamily: TChangeFamily,
+		public readonly changeFamily: ChangeFamily<TEditor, TChangeset>,
 		// TODO: Change this type to be the Session ID type provided by the IdCompressor when available.
 		localSessionId: SessionId,
 		public readonly localBranchUndoRedoManager: UndoRedoManager<TChangeset, any>,

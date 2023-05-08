@@ -19,7 +19,6 @@ import { IMultiFormatCodec } from "../codec";
 import { JsonCompatibleReadOnly, mapIterable } from "../util";
 import {
 	cachedValue,
-	ChangeFamily,
 	ICachedValue,
 	recordDependency,
 	SessionId,
@@ -59,11 +58,7 @@ export class EditManagerSummarizer<TChangeset> implements Summarizable {
 	private readonly changesetCodec: IMultiFormatCodec<TChangeset>;
 	public constructor(
 		private readonly runtime: IFluidDataStoreRuntime,
-		private readonly editManager: EditManager<
-			ChangeFamilyEditor,
-			TChangeset,
-			ChangeFamily<ChangeFamilyEditor, TChangeset>
-		>,
+		private readonly editManager: EditManager<ChangeFamilyEditor, TChangeset>,
 	) {
 		this.changesetCodec = this.editManager.changeFamily.codecs.resolve(formatVersion);
 		this.editDataBlob = cachedValue(async (observer) => {

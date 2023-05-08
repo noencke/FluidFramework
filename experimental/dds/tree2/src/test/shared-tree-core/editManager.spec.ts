@@ -19,7 +19,6 @@ import {
 import { brand, clone, makeArray, RecursiveReadonly } from "../../util";
 import {
 	TestAnchorSet,
-	TestChangeFamily,
 	TestChange,
 	UnrebasableTestChangeRebaser,
 	ConstrainedTestChangeRebaser,
@@ -29,7 +28,7 @@ import {
 import { MockRepairDataStoreProvider } from "../utils";
 import { Commit, EditManager, SeqNumber } from "../../shared-tree-core";
 
-type TestEditManager = EditManager<ChangeFamilyEditor, TestChange, TestChangeFamily>;
+type TestEditManager = EditManager<ChangeFamilyEditor, TestChange>;
 
 function editManagerFactory(options: {
 	rebaser?: ChangeRebaser<TestChange>;
@@ -42,11 +41,7 @@ function editManagerFactory(options: {
 	const family = testChangeFamilyFactory(options.rebaser);
 	const anchors = new TestAnchorSet();
 	const undoRedoManager = new UndoRedoManager(new MockRepairDataStoreProvider(), family);
-	const manager = new EditManager<
-		ChangeFamilyEditor,
-		TestChange,
-		ChangeFamily<ChangeFamilyEditor, TestChange>
-	>(
+	const manager = new EditManager<ChangeFamilyEditor, TestChange>(
 		family,
 		options.sessionId ?? localSessionId,
 		undoRedoManager,

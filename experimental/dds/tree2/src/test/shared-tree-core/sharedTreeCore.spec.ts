@@ -27,7 +27,7 @@ import {
 	SummaryElementParser,
 	SummaryElementStringifier,
 } from "../../shared-tree-core";
-import { ChangeFamily, ChangeFamilyEditor, rootFieldKeySymbol } from "../../core";
+import { ChangeFamilyEditor, rootFieldKeySymbol } from "../../core";
 import { DefaultChangeset, DefaultEditBuilder, singleTextCursor } from "../../feature-libraries";
 import { brand } from "../../util";
 import { ISubscribable } from "../../events";
@@ -383,7 +383,7 @@ function getTrunkLength<TEditor extends ChangeFamilyEditor, TChange>(
 	tree: SharedTreeCore<TEditor, TChange>,
 ): number {
 	const { editManager } = tree as unknown as {
-		editManager: EditManager<TEditor, TChange, ChangeFamily<TEditor, TChange>>;
+		editManager: EditManager<TEditor, TChange>;
 	};
 	assert(
 		editManager !== undefined,

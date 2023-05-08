@@ -91,7 +91,7 @@ export interface ChangeEvents<TChangeset> {
 export class SharedTreeCore<TEditor extends ChangeFamilyEditor, TChange> extends SharedObject<
 	TransformEvents<ISharedTreeCoreEvents, ISharedObjectEvents>
 > {
-	private readonly editManager: EditManager<TEditor, TChange, ChangeFamily<TEditor, TChange>>;
+	private readonly editManager: EditManager<TEditor, TChange>;
 	private readonly summarizables: readonly Summarizable[];
 
 	/**

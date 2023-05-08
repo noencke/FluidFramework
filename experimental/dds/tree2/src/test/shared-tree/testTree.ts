@@ -24,7 +24,6 @@ import {
 import { cursorToJsonObject, jsonSchema, singleJsonCursor } from "../../domains";
 import {
 	buildForest,
-	DefaultChangeFamily,
 	defaultChangeFamily,
 	DefaultChangeset,
 	DefaultEditBuilder,
@@ -83,11 +82,7 @@ export class TestTree {
 
 	public readonly sessionId: string;
 	public readonly forest: IEditableForest;
-	public readonly editManager: EditManager<
-		DefaultEditBuilder,
-		DefaultChangeset,
-		DefaultChangeFamily
-	>;
+	public readonly editManager: EditManager<DefaultEditBuilder, DefaultChangeset>;
 	public readonly schemaPolicy: SchemaPolicy;
 
 	private refNumber: number = -1;
@@ -109,11 +104,7 @@ export class TestTree {
 			new MockRepairDataStoreProvider(),
 			defaultChangeFamily,
 		);
-		this.editManager = new EditManager<
-			DefaultEditBuilder,
-			DefaultChangeset,
-			DefaultChangeFamily
-		>(
+		this.editManager = new EditManager<DefaultEditBuilder, DefaultChangeset>(
 			defaultChangeFamily,
 			this.sessionId,
 			undoRedoManager,
