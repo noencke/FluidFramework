@@ -346,11 +346,13 @@ export class SharedTreeBranch<TEditor extends ChangeFamilyEditor, TChange> exten
 	 * Rebase the changes that have been applied to this branch over all the divergent changes in the given branch.
 	 * After this operation completes, this branch will be based off of `branch`.
 	 * @param branch - the branch to rebase onto
+	 * @param upTo - the furthest commit on `branch` over which to rebase.
 	 * @returns the net change to this branch and the commits that were removed and added to this branch by the rebase,
 	 * or undefined if nothing changed
 	 */
 	public rebaseOnto(
 		branch: SharedTreeBranch<TEditor, TChange>,
+		upTo?: GraphCommit<TChange>
 	):
 		| [
 				change: TChange | undefined,
@@ -413,11 +415,13 @@ export class SharedTreeBranch<TEditor extends ChangeFamilyEditor, TChange> exten
 
 		if (this.undoRedoManager !== undefined) {
 			// TODO: We probably can merge a non-revertible branch into a revertible branch.
-			assert(
-				branch.undoRedoManager !== undefined,
-				"Cannot merge a non-revertible branch into a revertible branch",
-			);
-			this.undoRedoManager.updateAfterMerge(sourceCommits, branch.undoRedoManager);
+			// assert(
+			// 	branch.undoRedoManager !== undefined,
+			// 	"Cannot merge a non-revertible branch into a revertible branch",
+			// );
+			if (branch.undoRedoManager !== undefined) {
+				this.undoRedoManager.updateAfterMerge(sourceCommits, branch.undoRedoManager);
+			}
 		}
 		this.head = newHead;
 		const change = this.changeFamily.rebaser.compose(sourceCommits);
@@ -430,12 +434,15 @@ export class SharedTreeBranch<TEditor extends ChangeFamilyEditor, TChange> exten
 	}
 
 	/** Rebase `branchHead` onto `onto`, but return undefined if nothing changed */
-	private rebaseBranch(branchHead: GraphCommit<TChange>, onto: GraphCommit<TChange>) {
+	private rebaseBranch(branchHead: GraphCommit<TChange>, onto: GraphCommit<TChange>, upTo?: GraphCommit<TChange>) {
 		if (branchHead === onto) {
 			return undefined;
 		}
 
-		const rebaseResult = rebaseBranch(this.changeFamily.rebaser, branchHead, onto);
+		const rebaseResult = upTo !== undefined ? 
+		rebaseBranch(this.changeFamily.rebaser, branchHead, upTo, onto) : 
+		rebaseBranch(this.changeFamily.rebaser, branchHead, onto);
+		
 		const [rebasedHead] = rebaseResult;
 		if (this.head === rebasedHead) {
 			return undefined;

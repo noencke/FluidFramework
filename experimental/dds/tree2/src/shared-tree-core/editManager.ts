@@ -92,7 +92,10 @@ export class EditManager<
 	 * at the time of submitting the latest known edit on the branch.
 	 * This means the head commit of each branch is always in its original (non-rebased) form.
 	 */
-	private readonly peerLocalBranches: Map<SessionId, GraphCommit<TChangeset>> = new Map();
+	private readonly peerLocalBranches: Map<
+		SessionId,
+		SharedTreeBranch<TEditor, TChangeset>
+	> = new Map();
 
 	/**
 	 * This branch holds the changes made by this client which have not yet been confirmed as sequenced changes.
@@ -312,7 +315,7 @@ export class EditManager<
 				for (const [sessionId, branch] of this.peerLocalBranches) {
 					// If a session branch falls behind the min sequence number, then we know that its session has been abandoned by Fluid
 					// (because otherwise, it would have already been updated) and we expect not to receive any more updates for it.
-					if (findCommonAncestor(branch, newTrunkTail) === undefined) {
+					if (findCommonAncestor(branch.getHead(), newTrunkTail) === undefined) {
 						this.peerLocalBranches.delete(sessionId);
 					}
 				}
@@ -370,7 +373,7 @@ export class EditManager<
 			mapIterable(this.peerLocalBranches.entries(), ([sessionId, branch]) => {
 				const branchPath: GraphCommit<TChangeset>[] = [];
 				const ancestor =
-					findCommonAncestor([branch, branchPath], this.trunk) ??
+					findCommonAncestor([branch.getHead(), branchPath], this.trunk) ??
 					fail("Expected branch to be based on trunk");
 
 				return [
@@ -404,11 +407,16 @@ export class EditManager<
 		this.localBranch.setHead(this.trunk);
 
 		for (const [sessionId, branch] of data.branches) {
-			const commit =
+			const trunkBase =
 				findAncestor(this.trunk, (r) => r.revision === branch.base) ??
 				fail("Expected summary branch to be based off of a revision in the trunk");
 
-			this.peerLocalBranches.set(sessionId, branch.commits.reduce(mintCommit, commit));
+			const peerBranch = new SharedTreeBranch(
+				branch.commits.reduce(mintCommit, trunkBase),
+				sessionId,
+				this.changeFamily,
+			);
+			this.peerLocalBranches.set(sessionId, peerBranch);
 		}
 	}
 
@@ -457,41 +465,20 @@ export class EditManager<
 
 		// Rebase that branch over the part of the trunk up to the base revision
 		// This will be a no-op if the sending client has not advanced since the last time we received an edit from it
-		const [rebasedBranch] = rebaseBranch(
-			this.changeFamily.rebaser,
-			getOrCreate(this.peerLocalBranches, newCommit.sessionId, () => baseRevisionInTrunk),
-			baseRevisionInTrunk,
-			this.trunk,
-		);
-
-		if (rebasedBranch === this.trunk) {
-			// If the branch is fully caught up and empty after being rebased, then push to the trunk directly
-			this.pushToTrunk(sequenceNumber, newCommit);
-			this.peerLocalBranches.set(newCommit.sessionId, this.trunk);
-		} else {
-			const newChangeFullyRebased = rebaseChange(
-				this.changeFamily.rebaser,
-				newCommit.change,
-				rebasedBranch,
-				this.trunk,
-			);
-
-			this.peerLocalBranches.set(newCommit.sessionId, mintCommit(rebasedBranch, newCommit));
-
-			this.pushToTrunk(sequenceNumber, {
-				...newCommit,
-				change: newChangeFullyRebased,
-			});
-		}
-
+		const peerLocalBranch = getOrCreate(this.peerLocalBranches, newCommit.sessionId, () => new SharedTreeBranch(baseRevisionInTrunk, newCommit.sessionId, this.changeFamily));
+		peerLocalBranch.apply(newCommit.change, newCommit.revision);
 		// Constructing this short-lived SharedTreeBranch for the trunk allows the local branch
 		// to rebase onto it. TODO: Investigate if `this.trunk` can be a SharedTreeBranch.
-		const trunkBranch = new SharedTreeBranch(
+		let trunkBranch = new SharedTreeBranch(
 			this.trunk,
 			this.localSessionId,
 			this.changeFamily,
 			this.trunkUndoRedoManager,
 		);
+		peerLocalBranch.rebaseOnto(trunkBranch, baseRevisionInTrunk);
+		trunkBranch.merge(peerLocalBranch);
+		this.pushToTrunk(sequenceNumber, trunkBranch.getHead());
+		trunkBranch = new SharedTreeBranch(this.trunk, this.localSessionId, this.changeFamily, this.trunkUndoRedoManager);
 		this.localBranch.rebaseOnto(trunkBranch);
 	}
 
