@@ -6,6 +6,35 @@
 import { UpPath } from "../../core";
 import { ISubscribable } from "../../events";
 
+/**
+ * Events emitted by an EditableTree.
+ */
+interface EditableTreeEvents {
+	/**
+	 * After a node in the tree has changed, the node will emit a `changed` event,
+	 * followed by a `changed` event for each of the nodes in its ancestry ending at the root of the tree.
+	 * @param path - the path of the tree that changed
+	 * @param stopPropagation - a function that can be called to stop the event from propagating further
+	 */
+	changed(path: UpPath, stopPropagation: () => void): void;
+
+	/**
+	 * When part of the tree changes, the root of the tree will emit a `changing` event,
+	 * followed by a `changing` event for each of the nodes in the subtree that are changing in depth-first pre-order.
+	 * @param path - the path of the tree that is changing
+	 * @param stopPropagation - a function that can be called to stop the event from propagating further.
+	 * This prevents further calls to `changing` in the subtree, but does not prevent events in `subtree`.
+	 * @param subtree - a subscribable that will emit detailed events for the entire subtree depending on the type of change(s) that occurred.
+	 * When multiple nodes in the subtree change at once, the events are emitted in depth-first pre-order.
+	 * All subtree events for this tree are emitted before any subsequent `changing` events and their associated subtree events.
+	 */
+	changing(
+		path: UpPath,
+		stopPropagation: () => void,
+		subtree: ISubscribable<VisitorEvents>,
+	): void;
+}
+
 interface VisitorEvents {
 	/** The node at the given path is about to be deleted */
 	deleting(path: UpPath): void;
@@ -17,35 +46,6 @@ interface VisitorEvents {
 	inserted(path: UpPath): void;
 	/** The value of the node at the given path changed */
 	valueChanged(path: UpPath, value: unknown, previousValue: unknown): void;
-}
-
-/**
- * Events emitted by an EditableTree.
- */
-interface EditableTreeEvents {
-	/**
-	 * When part of the tree changes, the root of the tree will emit a `changing` event,
-	 * followed by a `changing` event for each of the nodes in the subtree that are changing in depth-first pre-order.
-	 * @param path - the path of the tree that is changing
-	 * @param stopPropagation - a function that can be called to stop the event from propagating further.
-	 * This prevents further calls to `changing` in the subtree, but does not prevent events in `subtree`.
-	 * @param subtree - a subscribable that will emit detailed events depending on the type of change(s) that occurred.
-	 * When multiple nodes in the subtree change at once, the events are emitted in depth-first pre-order.
-	 * All subtree events for this tree are emitted before any subsequent `changing` events and their associated subtree events.
-	 */
-	changing(
-		path: UpPath,
-		stopPropagation: () => void,
-		subtree: ISubscribable<VisitorEvents>,
-	): void;
-
-	/**
-	 * After a node in the tree has changed, the node will emit a `changed` event,
-	 * followed by a `changed` event for each of the nodes in its ancestry ending at the root of the tree.
-	 * @param path - the path of the tree that changed
-	 * @param stopPropagation - a function that can be called to stop the event from propagating further
-	 */
-	changed(path: UpPath, stopPropagation: () => void): void;
 }
 
 // #region Examples
@@ -120,6 +120,8 @@ a.on("changing", (_, stopPropagation, subtree) => {
 
 a.on("changing", (_, stopPropagation, subtree) => {
 	stopPropagation();
+	// Typescript is fine with these unsafe type declarations (: number) for the values, because typescript is sus.
+	// https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html#strict-function-types)
 	subtree.on("valueChanged", (path, value: number, previousValue: number) => {
 		console.log("valueChanged", path, value, previousValue);
 	});
