@@ -6,33 +6,39 @@
 import { UpPath } from "../../core";
 import { ISubscribable } from "../../events";
 
+interface EditableTreeChangeEventArgs {
+	/**
+	 * A function that can be called to stop the event from propagating further.
+	 */
+	stopPropagation: () => void;
+}
+
 /**
  * Events emitted by an EditableTree.
  */
-interface EditableTreeEvents {
-	/**
-	 * After a node in the tree has changed, the node will emit a `changed` event,
-	 * followed by a `changed` event for each of the nodes in its ancestry ending at the root of the tree.
-	 * @param path - the path of the tree that changed
-	 * @param stopPropagation - a function that can be called to stop the event from propagating further
-	 */
-	changed(path: UpPath, stopPropagation: () => void): void;
-
+interface EditableTreeChangeEvents {
 	/**
 	 * When part of the tree changes, the root of the tree will emit a `changing` event,
 	 * followed by a `changing` event for each of the nodes in the subtree that are changing in depth-first pre-order.
-	 * @param path - the path of the tree that is changing
-	 * @param stopPropagation - a function that can be called to stop the event from propagating further.
-	 * This prevents further calls to `changing` in the subtree, but does not prevent events in `subtree`.
-	 * @param subtree - a subscribable that will emit detailed events for the entire subtree depending on the type of change(s) that occurred.
+	 * @param args - the event arguments
+	 */
+	beforeChange(args: EditableTreeChangeEventArgs): void;
+
+	/**
+	 * After a node in the tree has changed, the node will emit a `changed` event,
+	 * followed by a `changed` event for each of the nodes in its ancestry ending at the root of the tree.
+	 * @param args - the event arguments
+	 */
+	afterChange(args: EditableTreeChangeEventArgs): void;
+}
+
+interface EditableTreeFineGrainedEvents {
+	/**
+	 * @param visitor - a subscribable that will emit detailed events for the entire subtree depending on the type of change(s) that occurred.
 	 * When multiple nodes in the subtree change at once, the events are emitted in depth-first pre-order.
 	 * All subtree events for this tree are emitted before any subsequent `changing` events and their associated subtree events.
 	 */
-	changing(
-		path: UpPath,
-		stopPropagation: () => void,
-		subtree: ISubscribable<VisitorEvents>,
-	): void;
+	visitChanging(visitor: ISubscribable<VisitorEvents>): void;
 }
 
 interface VisitorEvents {
@@ -48,85 +54,68 @@ interface VisitorEvents {
 	valueChanged(path: UpPath, value: unknown, previousValue: unknown): void;
 }
 
+class TreeNode
+	implements
+		ISubscribable<EditableTreeChangeEvents>,
+		ISubscribable<EditableTreeFineGrainedEvents>
+{
+	/**
+	 * Register an event that listens to changes in the tree.
+	 * @param eventName - the name of the event
+	 * @param listener - the handler to run when the event is fired
+	 * @param capture - if true, the listener will fire during the event capture phase, otherwise it will fire during the event bubble phase
+	 * @returns a function which will deregister the listener when run.
+	 * This function will error if called more than once.
+	 */
+	public on<K extends keyof EditableTreeChangeEvents>(
+		eventName: K,
+		listener: EditableTreeChangeEvents[K],
+		capture?: boolean,
+	): () => void;
+	/**
+	 * Register an event that listens to fine-grained changes in the tree.
+	 * @param eventName - the name of the event
+	 * @param listener - the handler to run when the event is fired
+	 * @returns a function which will deregister the listener when run.
+	 * This function will error if called more than once.
+	 */
+	public on<K extends keyof EditableTreeFineGrainedEvents>(
+		eventName: K,
+		listener: EditableTreeFineGrainedEvents[K],
+	): () => void;
+	public on<K extends keyof (EditableTreeChangeEvents | EditableTreeFineGrainedEvents)>(
+		eventName: K,
+		listener: K extends keyof EditableTreeChangeEvents
+			? EditableTreeChangeEvents[K]
+			: EditableTreeFineGrainedEvents[K],
+		capture = false,
+	): () => void {
+		return () => {};
+	}
+}
+
 // #region Examples
 
-//   a
-//  / \
-// b   c
+const node = undefined as unknown as TreeNode;
 
-const a = undefined as unknown as ISubscribable<EditableTreeEvents> & { b: number; c: number };
-a.b = 0;
-a.c = 0;
-
-// ---- The capturing (i.e. tunneling) events are called from top to bottom
-
-a.on("changing", (path) => {
-	console.log("changing", path);
-});
-a.b = 42;
-
-// "changing" a
-// "changing" a/b
-
-// ---- The bubbling events are called from bottom to top
-
-a.on("changed", (path) => {
-	console.log("changed", path);
-});
-a.b = 42;
-
-// "changed" a/b
-// "changed" a
-
-// ---- The capturing events can be stopped from propagating further
-
-a.on("changing", (path, stopPropagation) => {
-	stopPropagation();
-	console.log("changing", path);
-});
-a.b = 42;
-
-// "changing" a
-
-// ---- The bubbling events can be stopped from propagating further
-
-a.on("changed", (path, stopPropagation) => {
-	stopPropagation();
-	console.log("changed", path);
-});
-a.b = 42;
-
-// "changed" a/b
-
-// ---- The capturing events can register additional fine grained events
-
-a.on("changing", (_, stopPropagation, subtree) => {
-	stopPropagation();
-	subtree.on("moving", (path) => {
-		console.log("moving", path);
-	});
-	subtree.on("moved", (path) => {
-		console.log("moved", path);
-	});
-});
-// Swap a and b
-
-// "moving" a
-// "moved" b
-// "moving" b
-// "moved" a
-
-// ---- SetValue
-
-a.on("changing", (_, stopPropagation, subtree) => {
-	stopPropagation();
-	// Typescript is fine with these unsafe type declarations (: number) for the values, because typescript is sus.
-	// https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html#strict-function-types)
-	subtree.on("valueChanged", (path, value: number, previousValue: number) => {
-		console.log("valueChanged", path, value, previousValue);
-	});
+// Common use case
+node.on("afterChange", () => {
+	// invalidate/dirty my UI at `node`
 });
 
-// "valueChanged" a/b 42 0
+// Stop propagation during capture/tunnel/trickle phase
+node.on(
+	"afterChange",
+	({ stopPropagation }) => {
+		stopPropagation();
+	},
+	true,
+);
+
+// Fine-grained
+node.on("visitChanging", (visitor) => {
+	visitor.on("inserted", () => {});
+	visitor.on("deleting", () => {});
+});
 
 // #endregion Examples
