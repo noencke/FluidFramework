@@ -6,7 +6,7 @@
 import { UpPath } from "../../core";
 import { ISubscribable } from "../../events";
 
-interface EditableTreeChangeEventArgs {
+interface EditableTreeChange {
 	/**
 	 * A function that can be called to stop the event from propagating further.
 	 */
@@ -20,16 +20,16 @@ interface EditableTreeChangeEvents {
 	/**
 	 * When part of the tree changes, the root of the tree will emit a `changing` event,
 	 * followed by a `changing` event for each of the nodes in the subtree that are changing in depth-first pre-order.
-	 * @param args - the event arguments
+	 * @param ev - the event arguments
 	 */
-	beforeChange(args: EditableTreeChangeEventArgs): void;
+	beforeChange(ev: EditableTreeChange): void;
 
 	/**
 	 * After a node in the tree has changed, the node will emit a `changed` event,
 	 * followed by a `changed` event for each of the nodes in its ancestry ending at the root of the tree.
-	 * @param args - the event arguments
+	 * @param ev - the event arguments
 	 */
-	afterChange(args: EditableTreeChangeEventArgs): void;
+	afterChange(ev: EditableTreeChange): void;
 }
 
 interface EditableTreeFineGrainedEvents {
@@ -103,7 +103,7 @@ node.on("afterChange", () => {
 	// invalidate/dirty my UI at `node`
 });
 
-// Stop propagation during capture/tunnel/trickle phase
+// Stop propagation during capture/tunnel/trickle phase (stretch goal for MVP)
 node.on(
 	"afterChange",
 	({ stopPropagation }) => {
@@ -112,7 +112,7 @@ node.on(
 	true,
 );
 
-// Fine-grained
+// Fine-grained (not included in MVP)
 node.on("visitChanging", (visitor) => {
 	visitor.on("inserted", () => {});
 	visitor.on("deleting", () => {});
