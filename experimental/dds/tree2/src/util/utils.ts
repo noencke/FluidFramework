@@ -32,6 +32,16 @@ export type RecursiveReadonly<T> = {
  */
 export type Mutable<T> = { -readonly [P in keyof T]: T[P] };
 
+/**
+ * Casts a readonly object to a mutable one.
+ * Better than casting to `Mutable<Foo>` because it doesn't risk casting a non-`Foo` to a `Mutable<Foo>`.
+ * @param readonly - The object with readonly fields.
+ * @returns The same object but with a type that makes all fields mutable.
+ */
+export function asMutable<T>(readonly: T): Mutable<T> {
+	return readonly as Mutable<T>;
+}
+
 export function clone<T>(original: T): T {
 	return structuredClone(original);
 }
@@ -337,4 +347,19 @@ export function objectToMap<MapKey extends string | number | symbol, MapValue>(
 		map.set(key as MapKey, element);
 	}
 	return map;
+}
+
+/**
+ * Returns the value from `set` if it contains exactly one item, otherwise `undefined`.
+ */
+export function oneFromSet<T>(set: ReadonlySet<T> | undefined): T | undefined {
+	if (set === undefined) {
+		return undefined;
+	}
+	if (set.size !== 1) {
+		return undefined;
+	}
+	for (const item of set) {
+		return item;
+	}
 }

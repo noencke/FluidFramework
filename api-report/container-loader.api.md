@@ -40,9 +40,10 @@ export interface ICodeDetailsLoader extends Partial<IProvideFluidCodeDetailsComp
     load(source: IFluidCodeDetails): Promise<IFluidModuleWithDetails>;
 }
 
-// @internal
+// @public
 export interface IContainerExperimental extends IContainer {
-    getPendingLocalState(): string;
+    closeAndGetPendingLocalState?(): Promise<string>;
+    getPendingLocalState?(): Promise<string>;
 }
 
 // @public
@@ -101,11 +102,11 @@ export class Loader implements IHostLoader {
     constructor(loaderProps: ILoaderProps);
     // (undocumented)
     createDetachedContainer(codeDetails: IFluidCodeDetails): Promise<IContainer>;
-    // (undocumented)
+    // @deprecated (undocumented)
     get IFluidRouter(): IFluidRouter;
     // (undocumented)
     rehydrateDetachedContainerFromSnapshot(snapshot: string): Promise<IContainer>;
-    // (undocumented)
+    // @deprecated (undocumented)
     request(request: IRequest): Promise<IResponse>;
     // (undocumented)
     resolve(request: IRequest, pendingLocalState?: string): Promise<IContainer>;

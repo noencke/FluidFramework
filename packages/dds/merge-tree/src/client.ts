@@ -25,6 +25,7 @@ import {
 	CollaborationWindow,
 	compareStrings,
 	IConsensusInfo,
+	IMergeLeaf,
 	ISegment,
 	ISegmentAction,
 	Marker,
@@ -264,9 +265,9 @@ export class Client extends TypedEventEmitter<IClientEvents> {
 		}
 		const op = createInsertSegmentOp(pos, segment);
 
-		const opArgs = { op };
-		this._mergeTree.insertAtReferencePosition(refPos, segment, opArgs);
-		return op;
+		if (this.applyInsertOp({ op })) {
+			return op;
+		}
 	}
 
 	public walkSegments<TClientData>(
@@ -355,11 +356,12 @@ export class Client extends TypedEventEmitter<IClientEvents> {
 	 * @param segment - The segment to get the position of
 	 */
 	public getPosition(segment: ISegment | undefined, localSeq?: number): number {
-		if (segment?.parent === undefined) {
+		const mergeSegment: IMergeLeaf | undefined = segment;
+		if (mergeSegment?.parent === undefined) {
 			return -1;
 		}
 		return this._mergeTree.getPosition(
-			segment,
+			mergeSegment,
 			this.getCurrentSeq(),
 			this.getClientId(),
 			localSeq,
@@ -935,7 +937,10 @@ export class Client extends TypedEventEmitter<IClientEvents> {
 			const firstGroupNode = this._mergeTree.pendingSegments.find(
 				(node) => node.data === firstGroup,
 			);
-			assert(firstGroupNode !== undefined, "segment group must exist in pending list");
+			assert(
+				firstGroupNode !== undefined,
+				0x70e /* segment group must exist in pending list */,
+			);
 			this.pendingRebase = this._mergeTree.pendingSegments.splice(firstGroupNode);
 		}
 
@@ -1098,27 +1103,6 @@ export class Client extends TypedEventEmitter<IClientEvents> {
 		);
 	}
 
-	/**
-	 * Returns the position to slide a reference to if a slide is required.
-	 * @param segoff - The segment and offset to slide from
-	 * @returns - segment and offset to slide the reference to
-	 */
-	getSlideToSegment(segoff: { segment: ISegment | undefined; offset: number | undefined }) {
-		if (segoff.segment === undefined) {
-			return segoff;
-		}
-		const segment = this._mergeTree._getSlideToSegment(segoff.segment);
-		if (segment === segoff.segment) {
-			return segoff;
-		}
-		const offset =
-			segment && segment.ordinal < segoff.segment.ordinal ? segment.cachedLength - 1 : 0;
-		return {
-			segment,
-			offset,
-		};
-	}
-
 	getPropertiesAtPosition(pos: number) {
 		let propertiesAtPosition: PropertySet | undefined;
 		const segoff = this.getContainingSegment(pos);
@@ -1148,7 +1132,7 @@ export class Client extends TypedEventEmitter<IClientEvents> {
 	}
 
 	getLength() {
-		return this._mergeTree.length;
+		return this._mergeTree.length ?? 0;
 	}
 
 	startOrUpdateCollaboration(longClientId: string | undefined, minSeq = 0, currentSeq = 0) {

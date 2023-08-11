@@ -25,7 +25,7 @@ import {
 	valueSymbol,
 } from "@fluid-experimental/tree2";
 
-import { FluidObjectId } from "../CommonInterfaces";
+import { EditType, FluidObjectId } from "../CommonInterfaces";
 import {
 	FluidObjectTreeNode,
 	FluidObjectValueNode,
@@ -94,6 +94,7 @@ describe("DefaultVisualizers unit tests", () => {
 			value: 37,
 			typeMetadata: "SharedCounter",
 			nodeKind: VisualNodeKind.FluidValueNode,
+			editProps: { editTypes: [EditType.Number] },
 		};
 
 		expect(result).to.deep.equal(expected);
@@ -371,6 +372,7 @@ describe("DefaultVisualizers unit tests", () => {
 			value: "Hello World!",
 			typeMetadata: "SharedString",
 			nodeKind: VisualNodeKind.FluidValueNode,
+			editProps: { editTypes: [EditType.String] },
 		};
 
 		expect(result).to.deep.equal(expected);
@@ -382,32 +384,24 @@ describe("DefaultVisualizers unit tests", () => {
 
 		const sharedTree = factory.create(new MockFluidDataStoreRuntime(), "test");
 
-		const stringSchema = builder.primitive("string-property", ValueSchema.String);
-		const numberSchema = builder.primitive("number-property", ValueSchema.Number);
-		const booleanSchema = builder.primitive("boolean-property", ValueSchema.Boolean);
+		const stringSchema = builder.leaf("string-property", ValueSchema.String);
+		const numberSchema = builder.leaf("number-property", ValueSchema.Number);
+		const booleanSchema = builder.leaf("boolean-property", ValueSchema.Boolean);
 
-		const serializableSchema = builder.object("serializable-property", {
-			value: ValueSchema.Serializable,
+		const serializableSchema = builder.leaf("serializable-property", ValueSchema.Serializable);
+
+		const leafSchema = builder.struct("leaf-item", {
+			leafField: SchemaBuilder.fieldValue(serializableSchema),
 		});
 
-		const leafSchema = builder.object("leaf-item", {
-			local: {
-				leafField: SchemaBuilder.fieldValue(serializableSchema),
-			},
+		const childSchema = builder.struct("child-item", {
+			childField: SchemaBuilder.fieldValue(stringSchema, booleanSchema),
+			childData: SchemaBuilder.fieldOptional(leafSchema),
 		});
 
-		const childSchema = builder.object("child-item", {
-			local: {
-				childField: SchemaBuilder.fieldValue(stringSchema, booleanSchema),
-				childData: SchemaBuilder.fieldOptional(leafSchema),
-			},
-		});
-
-		const rootNodeSchema = builder.object("root-item", {
-			local: {
-				childrenOne: SchemaBuilder.fieldSequence(childSchema),
-				childrenTwo: SchemaBuilder.fieldValue(numberSchema),
-			},
+		const rootNodeSchema = builder.struct("root-item", {
+			childrenOne: SchemaBuilder.fieldSequence(childSchema),
+			childrenTwo: SchemaBuilder.fieldValue(numberSchema),
 		});
 
 		const schema = builder.intoDocumentSchema(
