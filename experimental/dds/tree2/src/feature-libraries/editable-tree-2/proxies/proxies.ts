@@ -23,7 +23,7 @@ import {
 	RequiredField,
 	TreeNode,
 	TypedField,
-	TypedNodeUnion,
+	boxedIterator,
 } from "../editableTreeTypes";
 import { LazySequence } from "../lazyField";
 import { FieldKey } from "../../../core";
@@ -34,31 +34,14 @@ import {
 	ProxyNode,
 	ProxyNodeUnion,
 	SharedTreeList,
+	SharedTreeNode,
 	SharedTreeObject,
+	getSharedTreeNode,
 	getTreeNode,
 	setTreeNode,
+	treeNodeSym,
 } from "./types";
-import { getFactoryContent } from "./objectFactory";
-
-const proxyCacheSym = Symbol("ProxyCache");
-
-/** Cache the proxy that wraps the given tree node so that the proxy can be re-used in future reads */
-function cacheProxy(
-	target: TreeNode,
-	proxy: SharedTreeList<AllowedTypes> | SharedTreeObject<ObjectNodeSchema>,
-): void {
-	Object.defineProperty(target, proxyCacheSym, {
-		value: proxy,
-		writable: false,
-		enumerable: false,
-		configurable: false,
-	});
-}
-
-/** If there has already been a proxy created to wrap the given tree node, return it */
-function getCachedProxy(treeNode: TreeNode): ProxyNode<TreeNodeSchema> | undefined {
-	return (treeNode as unknown as { [proxyCacheSym]: ProxyNode<TreeNodeSchema> })[proxyCacheSym];
-}
+import { getFactoryObjectContent } from "./objectFactory";
 
 /** Retrieve the associated proxy for the given field. */
 export function getProxyForField<TSchema extends TreeFieldSchema>(
@@ -112,23 +95,20 @@ export function getProxyForNode<TSchema extends TreeNodeSchema>(
 	}
 	const isFieldNode = schemaIsFieldNode(schema);
 	if (isFieldNode || schemaIsObjectNode(schema)) {
-		const cachedProxy = getCachedProxy(treeNode);
+		const cachedProxy = getSharedTreeNode(treeNode);
 		if (cachedProxy !== undefined) {
 			return cachedProxy as ProxyNode<TSchema>;
 		}
 
-		const proxy = isFieldNode ? createListProxy(treeNode) : createObjectProxy(treeNode, schema);
-		cacheProxy(treeNode, proxy);
+		const proxy = isFieldNode ? createListProxy(treeNode) : createObjectProxy();
+		setTreeNode(proxy, treeNode);
 		return proxy as ProxyNode<TSchema>;
 	}
 
 	fail("unrecognized node kind");
 }
 
-export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes extends AllowedTypes>(
-	content: TypedNodeUnion<TTypes>,
-	schema: TSchema,
-): SharedTreeObject<TSchema> {
+export function createObjectProxy<TSchema extends ObjectNodeSchema>(): SharedTreeObject<TSchema> {
 	// To satisfy 'deepEquals' level scrutiny, the target of the proxy must be an object with the same
 	// prototype as an object literal '{}'.  This is because 'deepEquals' uses 'Object.getPrototypeOf'
 	// as a way to quickly reject objects with different prototype chains.
@@ -142,7 +122,11 @@ export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes exten
 		{},
 		{
 			get(target, key): unknown {
-				const field = content.tryGetField(key as FieldKey);
+				if (key === treeNodeSym) {
+					return Reflect.get(target, key);
+				}
+
+				const field = assertTreeNode(proxy).tryGetField(key as FieldKey);
 				if (field !== undefined) {
 					return getProxyForField(field);
 				}
@@ -150,26 +134,32 @@ export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes exten
 				return Reflect.get(target, key);
 			},
 			set(target, key, value) {
-				const fieldSchema = content.schema.objectNodeFields.get(key as FieldKey);
+				const treeNode = assertTreeNode(proxy);
+				const fieldSchema = treeNode.schema.objectNodeFields.get(key as FieldKey);
 
 				if (fieldSchema === undefined) {
 					return false;
 				}
 
 				// TODO: Is it safe to assume 'content' is a LazyObjectNode?
-				assert(content instanceof LazyObjectNode, "invalid content");
+				assert(treeNode instanceof LazyObjectNode, "invalid content");
 				assert(typeof key === "string", "invalid key");
-				const field = getBoxedField(content, brand(key), fieldSchema);
+				const field = getBoxedField(treeNode, brand(key), fieldSchema);
 
 				switch (field.schema.kind) {
 					case FieldKinds.required: {
-						(field as RequiredField<AllowedTypes>).content =
-							getFactoryContent(value) ?? value;
+						const requiredField = field as RequiredField<AllowedTypes>;
+						requiredField.content = getFactoryObjectContent(value) ?? value;
+						setTreeNode(value, requiredField.boxedContent);
 						break;
 					}
 					case FieldKinds.optional: {
-						(field as OptionalField<AllowedTypes>).content =
-							getFactoryContent(value) ?? value;
+						const optionalField = field as OptionalField<AllowedTypes>;
+						optionalField.content = getFactoryObjectContent(value) ?? value;
+						setTreeNode(
+							value,
+							optionalField.boxedContent ?? fail("Expected optional field to be set"),
+						);
 						break;
 					}
 					default:
@@ -179,13 +169,13 @@ export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes exten
 				return true;
 			},
 			has: (target, key) => {
-				return schema.objectNodeFields.has(key as FieldKey);
+				return assertTreeNode(proxy).schema.objectNodeFields.has(key as FieldKey);
 			},
 			ownKeys: (target) => {
-				return [...schema.objectNodeFields.keys()];
+				return [...assertTreeNode(proxy).schema.objectNodeFields.keys()];
 			},
 			getOwnPropertyDescriptor: (target, key) => {
-				const field = content.tryGetField(key as FieldKey);
+				const field = assertTreeNode(proxy).tryGetField(key as FieldKey);
 
 				if (field === undefined) {
 					return undefined;
@@ -202,7 +192,6 @@ export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes exten
 			},
 		},
 	) as SharedTreeObject<TSchema>;
-	setTreeNode(proxy, content);
 	return proxy;
 }
 
@@ -210,28 +199,38 @@ export function createObjectProxy<TSchema extends ObjectNodeSchema, TTypes exten
  * Given the a list proxy, returns its underlying LazySequence field.
  */
 const getSequenceField = <TTypes extends AllowedTypes>(
-	list: SharedTreeList<AllowedTypes, "javaScript">,
+	list: SharedTreeList<TTypes, "javaScript">,
 ) => {
 	const treeNode = getTreeNode(list) as FieldNode<FieldNodeSchema>;
 	const field = treeNode.content;
 	return field as LazySequence<TTypes>;
 };
 
-// Converts a proxy union to contextually typed data, extracting factory content if necessary.
-const asContextuallyTypedData = (value: ProxyNodeUnion<AllowedTypes, "javaScript">) =>
-	(value === null || typeof value !== "object"
-		? value // Return primitives as-is
-		: getFactoryContent(value) ?? value) as ContextuallyTypedNodeData; // Otherwise extract factory content (if necessary).
+function insertListContent<TTypes extends AllowedTypes>(
+	list: SharedTreeList<TTypes, "javaScript">,
+	inserted: Iterable<ProxyNodeUnion<TTypes, "javaScript">>,
+	insert: (sequence: LazySequence<TTypes>, items: Iterable<ContextuallyTypedNodeData>) => void,
+): void {
+	const items: ContextuallyTypedNodeData[] = [];
+	const proxies: SharedTreeNode[] = [];
+	for (const v of inserted) {
+		if (v === null || typeof v !== "object") {
+			items.push(v as ContextuallyTypedNodeData);
+		} else {
+			const factoryContent = getFactoryObjectContent(v);
+			if (factoryContent !== undefined) {
+				proxies.push(v);
+			}
+			items.push(factoryContent ?? (v as ContextuallyTypedNodeData));
+		}
+	}
 
-// Used by 'insert*()' APIs to converts new content (expressed as a proxy union) to contextually
-// typed data prior to forwarding to 'LazySequence.insert*()'.
-function itemsAsContextuallyTyped(
-	iterable: Iterable<ProxyNodeUnion<AllowedTypes, "javaScript">>,
-): Iterable<ContextuallyTypedNodeData> {
-	// If the iterable is not already an array, copy it into an array to use '.map()' below.
-	return Array.isArray(iterable)
-		? iterable.map(asContextuallyTypedData)
-		: Array.from(iterable, asContextuallyTypedData);
+	const field = getSequenceField(list);
+	insert(field, items);
+
+	for (let i = 0; i < proxies.length; i++) {
+		setTreeNode(proxies[i], field.boxedAt(i));
+	}
 }
 
 // TODO: Experiment with alternative dispatch methods to see if we can improve performance.
@@ -252,7 +251,7 @@ const listPrototypeProperties: PropertyDescriptorMap = {
 			index: number,
 			value: Iterable<ProxyNodeUnion<AllowedTypes, "javaScript">>,
 		): void {
-			getSequenceField(this).insertAt(index, itemsAsContextuallyTyped(value));
+			insertListContent(this, value, (field, items) => field.insertAt(index, items));
 		},
 	},
 	insertAtStart: {
@@ -260,7 +259,7 @@ const listPrototypeProperties: PropertyDescriptorMap = {
 			this: SharedTreeList<AllowedTypes, "javaScript">,
 			value: Iterable<ProxyNodeUnion<AllowedTypes, "javaScript">>,
 		): void {
-			getSequenceField(this).insertAtStart(itemsAsContextuallyTyped(value));
+			insertListContent(this, value, (field, items) => field.insertAtStart(items));
 		},
 	},
 	insertAtEnd: {
@@ -268,7 +267,7 @@ const listPrototypeProperties: PropertyDescriptorMap = {
 			this: SharedTreeList<AllowedTypes, "javaScript">,
 			value: Iterable<ProxyNodeUnion<AllowedTypes, "javaScript">>,
 		): void {
-			getSequenceField(this).insertAtEnd(itemsAsContextuallyTyped(value));
+			insertListContent(this, value, (field, items) => field.insertAtEnd(items));
 		},
 	},
 	removeAt: {
@@ -497,3 +496,15 @@ export function createListProxy<TTypes extends AllowedTypes>(
 		},
 	});
 }
+
+function assertTreeNode(object: unknown): TreeNode {
+	return getTreeNode(object) ?? fail("Expected TreeNode to be present on object");
+}
+
+// function updateProxyAfterInsertion(proxy: SharedTreeNode, treeNode: TreeNode): void {
+// 	if (schemaIsObjectNode(treeNode.schema)) {
+// 		setTreeNode(proxy, treeNode);
+// 	}
+// 	for (const field of treeNode[boxedIterator]()) {
+// 	}
+// }

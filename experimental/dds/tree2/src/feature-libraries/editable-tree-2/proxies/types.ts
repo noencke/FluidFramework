@@ -289,22 +289,22 @@ export type ProxyRoot<
 > = TSchema extends TreeSchema<infer TRootFieldSchema> ? ProxyField<TRootFieldSchema, API> : never;
 
 /** Symbol used to store a private/internal reference to the underlying editable tree node. */
-const treeNodeSym = Symbol("TreeNode");
+export const treeNodeSym = Symbol("TreeNode");
 
 /** Helper to retrieve the stored tree node. */
 export function getTreeNode(target: unknown): TreeNode | undefined {
 	if (typeof target === "object" && target !== null) {
-		return (target as { [treeNodeSym]?: TreeNode })[treeNodeSym];
+		return (target as { [treeNodeSym]?: TreeNode } as any)[treeNodeSym];
 	}
 
 	return undefined;
 }
 
-/** Helper to set the stored tree node. */
-export function setTreeNode(target: any, treeNode: TreeNode) {
-	Object.defineProperty(target, treeNodeSym, {
-		value: treeNode,
-		// TODO: Investigate if this can be removed by properly implementing key-related traps in the proxy
-		configurable: true,
-	});
+export function setTreeNode(node: SharedTreeNode, treeNode: TreeNode): void {
+	Object.defineProperty(node, treeNodeSym, { value: treeNode, configurable: true });
+	Object.defineProperty(treeNode, treeNodeSym, { value: node, configurable: true });
+}
+
+export function getSharedTreeNode(treeNode: TreeNode): SharedTreeNode {
+	return (treeNode as any)[treeNodeSym] as SharedTreeNode;
 }
