@@ -3,11 +3,37 @@
  * Licensed under the MIT License.
  */
 
-import { TreeNodeSchema, schemaIsFieldNode } from "../typed-schema";
+import {
+	FieldNodeSchema,
+	MapNodeSchema,
+	ObjectNodeSchema,
+	TreeNodeSchema,
+	schemaIsFieldNode,
+} from "../typed-schema";
 import { EditableTreeEvents, TreeStatus } from "../flex-tree";
 import { getOrCreateNodeProxy } from "./proxies";
 import { getEditNode, tryGetEditNode } from "./editNode";
 import { ProxyNode, SharedTreeNode } from "./types";
+
+interface GetKey {
+	(child: SharedTreeNode): string | number;
+	<TParentSchema extends ObjectNodeSchema>(
+		parent: ProxyNode<TParentSchema>,
+		child: SharedTreeNode,
+	): keyof typeof parent;
+	<TParentSchema extends FieldNodeSchema>(
+		parent: ProxyNode<TParentSchema>,
+		child: SharedTreeNode,
+	): number;
+	<TParentSchema extends MapNodeSchema>(
+		parent: ProxyNode<TParentSchema>,
+		child: SharedTreeNode,
+	): string;
+	<TParentSchema extends TreeNodeSchema>(
+		parent: ProxyNode<TParentSchema>,
+		child: SharedTreeNode,
+	): string | number;
+}
 
 /**
  * Provides various functions for analyzing {@link SharedTreeNode}s.
@@ -45,7 +71,7 @@ export interface TreeApi {
 	 * If `node` is an element in a {@link TreeList}, this returns the index of `node` in the list (a `number`).
 	 * Otherwise, this returns the key of the field that it is under (a `string`).
 	 */
-	readonly key: (node: SharedTreeNode) => string | number;
+	readonly key: GetKey;
 	/**
 	 * Register an event listener on the given node.
 	 * @returns A callback function which will deregister the event.
@@ -84,20 +110,21 @@ export const nodeApi: TreeApi = {
 
 		return undefined;
 	},
-	key: (node: SharedTreeNode) => {
-		const editNode = getEditNode(node);
-		const parent = nodeApi.parent(node);
-		if (parent !== undefined) {
-			const parentSchema = nodeApi.schema(parent);
+	key: ((parentOrChild: SharedTreeNode, child?: SharedTreeNode) => {
+		const parentNode = child === undefined ? parentOrChild : nodeApi.parent(parentOrChild);
+		const childNode = child ?? parentOrChild;
+		const childEditNode = getEditNode(childNode);
+		if (parentNode !== undefined) {
+			const parentSchema = nodeApi.schema(parentNode);
 			if (schemaIsFieldNode(parentSchema)) {
 				// The parent of `node` is a list
-				return editNode.parentField.index;
+				return childEditNode.parentField.index;
 			}
 		}
 
 		// The parent of `node` is an object, a map, or undefined (and therefore `node` is a root/detached node).
-		return editNode.parentField.parent.key;
-	},
+		return childEditNode.parentField.parent.key;
+	}) as GetKey,
 	on: <K extends keyof EditableTreeEvents>(
 		node: SharedTreeNode,
 		eventName: K,

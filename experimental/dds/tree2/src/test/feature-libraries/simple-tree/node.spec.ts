@@ -9,17 +9,22 @@ import { ProxyRoot, SharedTreeNode, Tree, TreeStatus, Any } from "../../../featu
 import { SchemaBuilder } from "../../../domains";
 import { itWithRoot } from "./utils";
 
-describe("node API", () => {
+describe("Tree API", () => {
 	const sb = new SchemaBuilder({ scope: "object" });
 	const object = sb.object("child", {
 		content: sb.number,
 	});
 	const list = sb.list(object);
-	const parent = sb.object("parent", { object, list });
+	const map = sb.map(object);
+	const parent = sb.object("parent", { object, list, map });
 	const treeSchema = sb.intoSchema(parent);
 	const initialTree: ProxyRoot<typeof treeSchema, "javaScript"> = {
 		object: { content: 42 },
 		list: [{ content: 42 }, { content: 42 }, { content: 42 }],
+		map: new Map([
+			["a", { content: 42 }],
+			["b", { content: 42 }],
+		]),
 	};
 
 	describe("schema", () => {
@@ -50,8 +55,6 @@ describe("node API", () => {
 
 	describe("parent", () => {
 		itWithRoot("object", treeSchema, initialTree, (root) => {
-			const child = root.object;
-			const p = Tree.parent(child);
 			assert.equal(Tree.parent(root.object), root);
 		});
 
@@ -66,16 +69,30 @@ describe("node API", () => {
 
 	describe("key", () => {
 		itWithRoot("object", treeSchema, initialTree, (root) => {
-			for (const key of Object.keys(root) as Iterable<keyof typeof root>) {
-				const child = root[key];
-				assert.equal(Tree.key(child), key);
+			for (const [key, child] of Object.entries(root)) {
+				const key1 = Tree.key(child);
+				assert.equal(key1, key);
+				const key2 = Tree.key(root, child);
+				assert.equal(key2, key);
 			}
 		});
 
 		itWithRoot("list", treeSchema, initialTree, (root) => {
 			for (let key = 0; key < root.list.length; key += 1) {
 				const child = root.list[key];
-				assert.equal(Tree.key(child), key);
+				const key1 = Tree.key(child);
+				assert.equal(key1, key);
+				const key2 = Tree.key(root.list, child);
+				assert.equal(key2, key);
+			}
+		});
+
+		itWithRoot("map", treeSchema, initialTree, (root) => {
+			for (const [key, child] of root.list.entries()) {
+				const key1 = Tree.key(child);
+				assert.equal(key1, key);
+				const key2 = Tree.key(root.list, child);
+				assert.equal(key2, key);
 			}
 		});
 
