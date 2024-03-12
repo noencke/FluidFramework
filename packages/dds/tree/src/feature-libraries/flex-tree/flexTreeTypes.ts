@@ -4,7 +4,7 @@
  */
 
 import { AllowedTypesToFlexInsertableTree, InsertableFlexField } from "../schema-aware/index.js";
-import { FieldKey, ITreeCursorSynchronous, TreeValue } from "../../core/index.js";
+import { AnchorNode, FieldKey, ITreeCursorSynchronous, TreeValue } from "../../core/index.js";
 import { Assume, FlattenKeys } from "../../util/index.js";
 import { LocalNodeKey, StableNodeKey } from "../node-key/index.js";
 import {
@@ -146,6 +146,11 @@ export const onNextChange = Symbol("onNextChange");
  */
 export interface FlexTreeNode extends FlexTreeEntity<FlexTreeNodeSchema> {
 	readonly [flexTreeMarker]: FlexTreeEntityKind.Node;
+
+	/**
+	 * The anchor associated with this node.
+	 */
+	anchorNode: AnchorNode;
 
 	/**
 	 * Value stored on this node.

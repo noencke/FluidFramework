@@ -3,7 +3,7 @@
  * Licensed under the MIT License.
  */
 
-import { FieldKey, TreeNodeSchemaIdentifier } from "../core/index.js";
+import { AnchorNode, FieldKey, TreeNodeSchemaIdentifier } from "../core/index.js";
 import {
 	EditableTreeEvents,
 	FlexFieldNodeSchema,
@@ -83,6 +83,10 @@ export abstract class RawTreeNode<TSchema extends FlexTreeNodeSchema, TContent>
 {
 	public readonly [flexTreeMarker] = FlexTreeEntityKind.Node as const;
 	public readonly [nodeContent]: TContent;
+
+	public get anchorNode(): AnchorNode {
+		throw rawError("Getting anchor");
+	}
 
 	public readonly type: TreeNodeSchemaIdentifier;
 	public constructor(

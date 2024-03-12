@@ -707,6 +707,8 @@ export interface FlexTreeNode extends FlexTreeEntity<FlexTreeNodeSchema> {
     readonly [flexTreeMarker]: FlexTreeEntityKind.Node;
     [onNextChange](fn: (node: FlexTreeNode) => void): () => void;
     // (undocumented)
+    anchorNode: AnchorNode;
+    // (undocumented)
     boxedIterator(): IterableIterator<FlexTreeField>;
     is<TSchema extends FlexTreeNodeSchema>(schema: TSchema): this is FlexTreeTypedNode<TSchema>;
     on<K extends keyof EditableTreeEvents>(eventName: K, listener: EditableTreeEvents[K]): () => void;
@@ -1729,9 +1731,15 @@ export interface TreeAdapter {
 }
 
 // @public
+<<<<<<< Updated upstream
 export interface TreeApi extends TreeNodeApi {
     runTransaction<TNode extends TreeNode>(node: TNode, transaction: (node: TNode) => void | "rollback"): void;
     runTransaction<TRoot>(tree: TreeView<TRoot>, transaction: (root: TRoot) => void | "rollback"): void;
+=======
+export interface TreeApi extends SimpleTreeApi {
+    runTransaction<TNode extends TreeNode>(node: TNode, transaction: (node: TNode) => void | "rollback", preconditions?: Iterable<TransactionConstraint>): void;
+    runTransaction<TRoot>(tree: TreeView<TRoot>, transaction: (root: TRoot) => void | "rollback", preconditions?: Iterable<TransactionConstraint>): void;
+>>>>>>> Stashed changes
 }
 
 // @public
