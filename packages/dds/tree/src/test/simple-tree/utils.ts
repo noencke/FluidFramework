@@ -4,6 +4,7 @@
  */
 
 // eslint-disable-next-line import/no-internal-modules
+import { buildForest } from "../../feature-libraries/index.js";
 import {
 	ImplicitFieldSchema,
 	TreeConfiguration,
@@ -13,7 +14,7 @@ import {
 } from "../../simple-tree/index.js";
 // eslint-disable-next-line import/no-internal-modules
 import { getProxyForField } from "../../simple-tree/proxies.js";
-import { flexTreeWithContent } from "../utils.js";
+import { addContentToForest, flexTreeWithContent } from "../utils.js";
 
 /**
  * Given the schema and initial tree data, returns a hydrated tree node.
@@ -25,8 +26,10 @@ export function hydrate<TSchema extends ImplicitFieldSchema>(
 	initialTree: InsertableTreeFieldFromImplicitField<TSchema>,
 ): TreeFieldFromImplicitField<TSchema> {
 	const config = new TreeConfiguration(schema, () => initialTree);
-	const flexConfig = toFlexConfig(config);
-	const tree = flexTreeWithContent(flexConfig);
+	const forest = buildForest();
+	const flexConfig = toFlexConfig(config, forest.anchors);
+	addContentToForest(forest, flexConfig);
+	const tree = flexTreeWithContent(flexConfig, {});
 	return getProxyForField(tree) as TreeFieldFromImplicitField<TSchema>;
 }
 

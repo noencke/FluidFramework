@@ -10,6 +10,7 @@ import {
 	TreeFieldStoredSchema,
 	FieldKey,
 	IForestSubscription,
+	AnchorSet,
 } from "../../core/index.js";
 import { ISubscribable } from "../../events/index.js";
 import { IDefaultEditBuilder } from "../default-schema/index.js";
@@ -44,6 +45,11 @@ export interface FlexTreeContext extends ISubscribable<ForestEvents> {
 	// - branching APIs
 
 	readonly nodeKeys: NodeKeys;
+
+	/**
+	 * The anchor set to which this node's anchor belongs
+	 */
+	readonly anchorSet: AnchorSet;
 }
 
 /**
@@ -133,6 +139,10 @@ export class Context implements FlexTreeContext, IDisposable {
 	 */
 	// TODO: Use this to automatically provide node keys where required.
 	public fieldSource?(key: FieldKey, schema: TreeFieldStoredSchema): undefined | FieldGenerator;
+
+	public get anchorSet(): AnchorSet {
+		return this.forest.anchors;
+	}
 }
 
 /**

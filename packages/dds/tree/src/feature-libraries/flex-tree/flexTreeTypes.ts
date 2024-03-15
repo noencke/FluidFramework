@@ -4,7 +4,13 @@
  */
 
 import { AllowedTypesToFlexInsertableTree, InsertableFlexField } from "../schema-aware/index.js";
-import { FieldKey, ITreeCursorSynchronous, TreeValue } from "../../core/index.js";
+import {
+	AnchorNode,
+	FieldKey,
+	ITreeCursorSynchronous,
+	TreeValue,
+	anchorSlot,
+} from "../../core/index.js";
 import { Assume, FlattenKeys } from "../../util/index.js";
 import { LocalNodeKey, StableNodeKey } from "../node-key/index.js";
 import {
@@ -25,6 +31,10 @@ import { FieldKinds } from "../default-schema/index.js";
 import { FlexFieldKind } from "../modular-schema/index.js";
 import { EditableTreeEvents } from "./treeEvents.js";
 import { FlexTreeContext } from "./context.js";
+
+// TODO document
+/***/
+export const flexTreeSlot = anchorSlot<FlexTreeNode>();
 
 /**
  * Indicates that an object is a flex tree.
@@ -121,12 +131,6 @@ export enum TreeStatus {
 }
 
 /**
- * {@inheritdoc TreeNode.[onNextChange]}
- * @internal
- */
-export const onNextChange = Symbol("onNextChange");
-
-/**
  * Generic tree node API.
  *
  * Nodes are (shallowly) immutable and have a logical identity, a type and either a value or fields under string keys.
@@ -178,21 +182,9 @@ export interface FlexTreeNode extends FlexTreeEntity<FlexTreeNodeSchema> {
 	boxedIterator(): IterableIterator<FlexTreeField>;
 
 	/**
-	 * Subscribe to the next change that affects this node's children.
-	 * @returns a function which will deregister the registered event.
-	 * It has no effect if the event was already deregistered.
-	 * @remarks
-	 * The given function will be run the next time that this node's direct children change.
-	 * It will only be run once, and thereafter automatically deregistered.
-	 * It does not run in response to changes beneath this node's direct children.
-	 * This event fires after the tree has been mutated but before {@link EditableTreeEvents.afterChange}.
-	 * Only one subscriber may register to this event at the same time.
-	 * @privateRemarks
-	 * This event allows the proxy-based API that is built on top of the editable tree to maintain invariants
-	 * around "hydrating" proxies that were created with schema-provided factory functions.
-	 * It is not a public API and thus the symbol for this property is not exported.
+	 * The anchor node associated with this node
 	 */
-	[onNextChange](fn: (node: FlexTreeNode) => void): () => void;
+	readonly anchorNode: AnchorNode;
 }
 
 /**

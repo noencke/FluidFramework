@@ -20,12 +20,17 @@ import {
 } from "../feature-libraries/index.js";
 import { brand, fail, isReadonlyArray, mapIterable } from "../util/index.js";
 import { normalizeFlexListEager } from "../feature-libraries/typed-schema/flexList.js";
-import { ITreeCursorSynchronous, TreeNodeSchemaIdentifier } from "../core/index.js";
+import {
+	AnchorSet,
+	EmptyKey,
+	ITreeCursorSynchronous,
+	TreeNodeSchemaIdentifier,
+} from "../core/index.js";
 import { TreeContent } from "../shared-tree/index.js";
 import {
 	InsertableContent,
-	extractFactoryContent,
 	getClassSchema,
+	prepareForInsertion,
 	simpleSchemaSymbol,
 } from "./proxies.js";
 import { cursorFromNodeData } from "./toMapTree.js";
@@ -51,19 +56,26 @@ import { TreeConfiguration } from "./tree.js";
 export function cursorFromUnhydratedRoot(
 	schema: FlexTreeSchema,
 	tree: InsertableTreeNodeFromImplicitAllowedTypes,
+	anchors: AnchorSet,
 ): ITreeCursorSynchronous {
-	const data = extractFactoryContent(tree as InsertableContent);
+	const data = prepareForInsertion(
+		tree as InsertableContent,
+		{ parent: undefined, parentField: EmptyKey, parentIndex: 0 },
+		anchors,
+	);
 	return (
-		cursorFromNodeData(data.content, schema, schema.rootFieldSchema.allowedTypeSet) ??
+		cursorFromNodeData(data, schema, schema.rootFieldSchema.allowedTypeSet) ??
 		fail("failed to decode tree")
 	);
 }
 
-export function toFlexConfig(config: TreeConfiguration): TreeContent {
+export function toFlexConfig(config: TreeConfiguration, anchors: AnchorSet): TreeContent {
 	const schema = toFlexSchema(config.schema);
 	const unhydrated = config.initialTree();
 	const initialTree =
-		unhydrated === undefined ? undefined : [cursorFromUnhydratedRoot(schema, unhydrated)];
+		unhydrated === undefined
+			? undefined
+			: [cursorFromUnhydratedRoot(schema, unhydrated, anchors)];
 	return {
 		schema,
 		initialTree,

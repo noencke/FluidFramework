@@ -196,6 +196,18 @@ describe("SharedTreeList", () => {
 			assert.deepEqual(root, [{ id: "A" }, newItem, { id: "C" }]);
 		});
 
+		it("multiple objects", () => {
+			const root = hydrate(schema, []);
+			assert.deepEqual(root, []);
+			const newItemA = new obj({ id: "A" });
+			const newItemB = new obj({ id: "B" });
+			root.insertAt(0, newItemA, newItemB);
+			// Check that the inserted and read proxies are the same object
+			assert.equal(newItemA, root[0]);
+			assert.equal(newItemB, root[1]);
+			assert.deepEqual(root, [newItemA, newItemB]);
+		});
+
 		it("at()", () => {
 			const root = hydrate(schema, [{ id: "B" }]);
 			assert.equal(root.at(0), root[0]);

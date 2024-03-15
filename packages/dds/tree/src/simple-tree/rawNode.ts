@@ -3,7 +3,7 @@
  * Licensed under the MIT License.
  */
 
-import { FieldKey, TreeNodeSchemaIdentifier } from "../core/index.js";
+import { AnchorNode, FieldKey, TreeNodeSchemaIdentifier } from "../core/index.js";
 import {
 	EditableTreeEvents,
 	FlexFieldNodeSchema,
@@ -18,7 +18,6 @@ import {
 	FlexTreeUnboxField,
 	FlexibleFieldContent,
 	flexTreeMarker,
-	onNextChange,
 	LocalNodeKey,
 	FlexMapNodeSchema,
 	FlexObjectNodeSchema,
@@ -129,8 +128,8 @@ export abstract class RawTreeNode<TSchema extends FlexTreeNodeSchema, TContent>
 		throw rawError("Event registration");
 	}
 
-	public [onNextChange](fn: (node: FlexTreeNode) => void): () => void {
-		throw rawError("onNextChange event registration");
+	public get anchorNode(): AnchorNode {
+		throw rawError("Getting anchor node");
 	}
 }
 

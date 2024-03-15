@@ -14,17 +14,19 @@ import {
 	FlexTreeFieldNode,
 	FlexTreeMapNode,
 	assertFlexTreeEntityNotFreed,
+	flexTreeSlot,
+	schemaIsMap,
+	schemaIsFieldNode,
+	schemaIsObjectNode,
 } from "../feature-libraries/index.js";
+import { AnchorNode, anchorSlot } from "../core/index.js";
 import { TreeNode, TypedNode } from "./types.js";
 import { TreeArrayNode } from "./treeArrayNode.js";
-import { TreeMapNode } from "./schemaTypes.js";
+import { TreeMapNode, TreeObjectNode } from "./schemaTypes.js";
 import { RawTreeNode } from "./rawNode.js";
 
-/** Associates an FlexTreeNode with a target object  */
-const targetSymbol = Symbol("FlexNodeTarget");
-interface HasTarget {
-	[targetSymbol]: TreeNode;
-}
+/** TODO document */
+const proxySlot = anchorSlot<TreeNode>();
 
 /**
  * This is intentionally a WeakMap, rather than a private symbol (e.g. like `targetSymbol`).
@@ -32,7 +34,10 @@ interface HasTarget {
  * Since `SharedTreeNodes` are proxies with non-trivial `get` traps, this choice is meant to prevent the confusion of the lookup passing through multiple objects
  * via the trap, or the trap not properly handling the special symbol, etc.
  */
-const flexNodeMap = new WeakMap<TreeNode, FlexTreeNode>();
+const proxyToAnchorMap = new WeakMap<TreeNode, AnchorNode>();
+
+// TODO: doc
+const proxyToRawFlexNode = new WeakMap<TreeNode, RawTreeNode<FlexFieldNodeSchema, unknown>>();
 
 /**
  * Retrieves the flex node associated with the given target via {@link setFlexNode}.
@@ -52,11 +57,55 @@ export function getFlexNode(
 ): FlexTreeMapNode<FlexMapNodeSchema>;
 export function getFlexNode(target: TreeNode, allowFreed?: true): FlexTreeNode;
 export function getFlexNode(target: TreeNode, allowFreed = false): FlexTreeNode {
-	const node = flexNodeMap.get(target) ?? fail("Target is not associated with a flex node");
-	if (!(node instanceof RawTreeNode) && !allowFreed) {
-		assertFlexTreeEntityNotFreed(node);
+	const anchorNode = proxyToAnchorMap.get(target);
+	if (anchorNode !== undefined) {
+		const flexNode = demand(anchorNode);
+		assert(!(flexNode instanceof RawTreeNode), "Expected cooked flex node");
+		if (!allowFreed) {
+			assertFlexTreeEntityNotFreed(flexNode);
+		}
+		return flexNode;
 	}
-	return node;
+
+	const rawFlexNode =
+		proxyToRawFlexNode.get(target) ?? fail("Target is not associated with a flex node");
+
+	assert(rawFlexNode instanceof RawTreeNode, "Expected raw flex node");
+	return rawFlexNode;
+}
+
+function demand(anchorNode: AnchorNode): FlexTreeNode {
+	const ancestry: AnchorNode[] = [anchorNode];
+	while (ancestry[ancestry.length - 1].slots.get(flexTreeSlot) === undefined) {
+		const parent =
+			ancestry[ancestry.length - 1].parent ??
+			fail("Failed to hydrate proxy: tree root is unhydrated"); // TODO: need to do something special for the root?
+
+		ancestry.push(parent);
+	}
+	while (ancestry.length >= 2) {
+		const parent = ancestry[ancestry.length - 1];
+		const child = ancestry[ancestry.length - 2];
+		const firstFlexAncestor =
+			parent.slots.get(flexTreeSlot) ?? fail("Expected flex tree for anchor node");
+
+		const proxy = parent.slots.get(proxySlot) ?? fail("Expected proxy for anchor node");
+		if (schemaIsFieldNode(firstFlexAncestor.schema)) {
+			const array = proxy as TreeArrayNode;
+			array.at(child.parentIndex);
+		} else if (schemaIsMap(firstFlexAncestor.schema)) {
+			const map = proxy as TreeMapNode;
+			map.get(child.parentField);
+		} else if (schemaIsObjectNode(firstFlexAncestor.schema)) {
+			const obj = proxy as TreeObjectNode<any>;
+			// eslint-disable-next-line @typescript-eslint/no-unused-expressions
+			obj[child.parentField];
+		} else {
+			fail("Unexpected flex node schema type");
+		}
+		ancestry.pop();
+	}
+	return ancestry[0].slots.get(flexTreeSlot) ?? fail("Expected flex tree for anchor node");
 }
 
 /**
@@ -65,14 +114,17 @@ export function getFlexNode(target: TreeNode, allowFreed = false): FlexTreeNode 
 export function tryGetFlexNode(target: unknown): FlexTreeNode | undefined {
 	// Calling 'WeakMap.get()' with primitives (numbers, strings, etc.) will return undefined.
 	// This is in contrast to 'WeakMap.set()', which will throw a TypeError if given a non-object key.
-	return flexNodeMap.get(target as TreeNode);
+	return (
+		proxyToAnchorMap.get(target as TreeNode)?.slots.get(flexTreeSlot) ??
+		proxyToRawFlexNode.get(target as TreeNode)
+	);
 }
 
 /**
  * Retrieves the target associated with the given flex node via {@link setFlexNode}, if any.
  */
 export function tryGetFlexNodeTarget(flexNode: FlexTreeNode): TreeNode | undefined {
-	return (flexNode as Partial<HasTarget>)[targetSymbol];
+	return flexNode.anchorNode.slots.get(proxySlot);
 }
 
 /**
@@ -85,12 +137,26 @@ export function tryGetFlexNodeTarget(flexNode: FlexTreeNode): TreeNode | undefin
  * If the given flex node is already mapped to a different target, this function will fail.
  */
 export function setFlexNode<T extends TreeNode>(target: T, flexNode: FlexTreeNode): T {
-	assert(
-		tryGetFlexNodeTarget(flexNode) === undefined,
-		0x7f5 /* Cannot associate an flex node with multiple targets */,
-	);
-	delete (flexNodeMap.get(target) as Partial<HasTarget>)?.[targetSymbol];
-	flexNodeMap.set(target, flexNode);
-	Object.defineProperty(flexNode, targetSymbol, { value: target, configurable: true });
+	const existingFlexNode = proxyToAnchorMap.get(target)?.slots.get(flexTreeSlot);
+	assert(existingFlexNode === undefined, "Cannot associate a flex node with multiple targets");
+	if (flexNode instanceof RawTreeNode) {
+		proxyToRawFlexNode.set(target, flexNode);
+	} else {
+		assert(
+			tryGetFlexNodeTarget(flexNode) === undefined,
+			0x7f5 /* Cannot associate an flex node with multiple targets */,
+		);
+		bindProxyToAnchorNode(target, flexNode.anchorNode);
+		// TODO: Cleanup up red line and anchor
+	}
 	return target;
+}
+
+// TODO document
+export function bindProxyToAnchorNode(proxy: TreeNode, anchorNode: AnchorNode): void {
+	// Once a proxy has been associated with an anchor node, it should never change to another anchor node
+	assert(!proxyToAnchorMap.has(proxy), "Proxy has already been bound to a different anchor node");
+	proxyToAnchorMap.set(proxy, anchorNode);
+	// However, it's fine for an anchor node to rotate through different proxies when the content at that place in the tree is replaced.
+	anchorNode.slots.set(proxySlot, proxy);
 }

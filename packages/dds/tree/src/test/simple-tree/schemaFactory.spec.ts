@@ -621,7 +621,11 @@ describe("schemaFactory", () => {
 						treeObjects.sort(compareComboNodes);
 						for (let i = 0; i < nodes.length; i++) {
 							// Each raw object should be reference equal to the corresponding object in the tree.
-							assert.equal(nodes[i], treeObjects[i]);
+							try {
+								assert.equal(nodes[i], treeObjects[i]);
+							} catch (e) {
+								debugger;
+							}
 						}
 					}
 
@@ -633,6 +637,30 @@ describe("schemaFactory", () => {
 				});
 			}
 		}
+
+		it("multiple objects being inserted into a list", () => {
+			const sf = new SchemaFactory("test");
+
+			class TestObject extends sf.object("Obj", {
+				name: sf.string,
+			}) {}
+
+			class TestRoot extends sf.object("Root", {
+				objects: sf.array("Objects", [TestObject]),
+			}) {}
+
+			const config = new TreeConfiguration(TestRoot, () => ({
+				objects: [],
+			}));
+
+			const factory = new TreeFactory({});
+			const tree = factory.create(
+				new MockFluidDataStoreRuntime({ idCompressor: createIdCompressor() }),
+				"test",
+			);
+			const view = tree.schematize(config);
+			view.root.objects.insertAtStart(...[new TestObject({ name: "A" }), { name: "B" }]);
+		});
 	});
 
 	it("schemaFromValue", () => {

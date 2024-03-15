@@ -639,6 +639,7 @@ export class FlexObjectNodeSchema<const out Name extends string = string, const 
 
 // @internal
 export interface FlexTreeContext extends ISubscribable<ForestEvents> {
+    readonly anchorSet: AnchorSet;
     // (undocumented)
     readonly nodeKeys: NodeKeys;
     get root(): FlexTreeField;
@@ -718,7 +719,7 @@ export const flexTreeMarker: unique symbol;
 export interface FlexTreeNode extends FlexTreeEntity<FlexTreeNodeSchema> {
     // (undocumented)
     readonly [flexTreeMarker]: FlexTreeEntityKind.Node;
-    [onNextChange](fn: (node: FlexTreeNode) => void): () => void;
+    readonly anchorNode: AnchorNode;
     // (undocumented)
     boxedIterator(): IterableIterator<FlexTreeField>;
     is<TSchema extends FlexTreeNodeSchema>(schema: TSchema): this is FlexTreeTypedNode<TSchema>;
