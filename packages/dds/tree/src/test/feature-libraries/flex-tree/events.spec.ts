@@ -2,12 +2,13 @@
  * Copyright (c) Microsoft Corporation and contributors. All rights reserved.
  * Licensed under the MIT License.
  */
+
 import { strict as assert } from "assert";
 
+import { SchemaBuilder, leaf } from "../../../domains/index.js";
+import { typeboxValidator } from "../../../external-utilities/index.js";
 import { FieldKinds } from "../../../feature-libraries/index.js";
 import { ForestType, SharedTreeFactory } from "../../../shared-tree/index.js";
-import { typeboxValidator } from "../../../external-utilities/index.js";
-import { SchemaBuilder, leaf } from "../../../domains/index.js";
 import { flexTreeWithContent } from "../../utils.js";
 
 describe("beforeChange/afterChange events", () => {

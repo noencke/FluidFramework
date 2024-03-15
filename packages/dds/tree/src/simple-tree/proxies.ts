@@ -3,33 +3,8 @@
  * Licensed under the MIT License.
  */
 
-import { assert } from "@fluidframework/core-utils";
 import { IFluidHandle } from "@fluidframework/core-interfaces";
-import { brand, fail, isReadonlyArray } from "../util/index.js";
-import {
-	FlexAllowedTypes,
-	FlexFieldSchema,
-	FlexObjectNodeSchema,
-	FlexTreeNodeSchema,
-	schemaIsFieldNode,
-	schemaIsLeaf,
-	schemaIsMap,
-	schemaIsObjectNode,
-	FlexMapNodeSchema,
-	FlexFieldNodeSchema,
-	FieldKinds,
-	FlexTreeFieldNode,
-	FlexTreeMapNode,
-	FlexTreeObjectNode,
-	FlexTreeOptionalField,
-	FlexTreeRequiredField,
-	FlexTreeSequenceField,
-	FlexTreeNode,
-	FlexTreeTypedField,
-	typeNameSymbol,
-	isFluidHandle,
-	FlexTreeField,
-} from "../feature-libraries/index.js";
+import { assert } from "@fluidframework/core-utils";
 import {
 	AnchorSet,
 	EmptyKey,
@@ -42,22 +17,44 @@ import {
 // eslint-disable-next-line import/no-internal-modules
 import { LazyObjectNode, getBoxedField } from "../feature-libraries/flex-tree/lazyNode.js";
 import {
-	type TreeNodeSchema as TreeNodeSchemaClass,
+	FieldKinds,
+	FlexAllowedTypes,
+	FlexFieldNodeSchema,
+	FlexFieldSchema,
+	FlexMapNodeSchema,
+	FlexObjectNodeSchema,
+	FlexTreeField,
+	FlexTreeNode,
+	FlexTreeNodeSchema,
+	FlexTreeOptionalField,
+	FlexTreeRequiredField,
+	FlexTreeSequenceField,
+	FlexTreeTypedField,
+	isFluidHandle,
+	schemaIsFieldNode,
+	schemaIsLeaf,
+	schemaIsMap,
+	schemaIsObjectNode,
+	typeNameSymbol,
+} from "../feature-libraries/index.js";
+import { brand, fail, isReadonlyArray } from "../util/index.js";
+import {
+	bindProxyToAnchorNode,
+	getFlexNode,
+	setFlexNode,
+	tryGetFlexNode,
+	tryGetFlexNodeTarget,
+} from "./flexNode.js";
+import { RawTreeNode, createRawNode, extractRawNodeContent } from "./rawNode.js";
+import {
 	type InsertableTypedNode,
 	NodeKind,
 	TreeMapNode,
+	type TreeNodeSchema as TreeNodeSchemaClass,
 } from "./schemaTypes.js";
-import { IterableTreeArrayContent, TreeArrayNode } from "./treeArrayNode.js";
-import { Unhydrated, TreeNode } from "./types.js";
-import {
-	setFlexNode,
-	getFlexNode,
-	tryGetFlexNode,
-	tryGetFlexNodeTarget,
-	bindProxyToAnchorNode,
-} from "./flexNode.js";
 import { cursorFromFieldData, cursorFromNodeData } from "./toMapTree.js";
-import { RawTreeNode, createRawNode, extractRawNodeContent } from "./rawNode.js";
+import { IterableTreeArrayContent, TreeArrayNode } from "./treeArrayNode.js";
+import { TreeNode, Unhydrated } from "./types.js";
 
 /**
  * Detects if the given 'candidate' is a TreeNode.
@@ -137,23 +134,14 @@ export function getOrCreateNodeProxy(flexNode: FlexTreeNode): TreeNode | TreeVal
 	}
 
 	const schema = flexNode.schema;
-	let output: TreeNode | TreeValue;
 	const classSchema = getClassSchema(schema);
-	if (classSchema !== undefined) {
-		if (typeof classSchema === "function") {
-			const simpleSchema = classSchema as unknown as new (dummy: FlexTreeNode) => TreeNode;
-			output = new simpleSchema(flexNode);
-		} else {
-			output = (schema as unknown as { create: (data: FlexTreeNode) => TreeNode }).create(
-				flexNode,
-			);
-		}
+	assert(classSchema !== undefined, "node without schema");
+	if (typeof classSchema === "function") {
+		const simpleSchema = classSchema as unknown as new (dummy: FlexTreeNode) => TreeNode;
+		return new simpleSchema(flexNode);
 	} else {
-		// Fallback to createNodeProxy if needed.
-		// TODO: maybe remove this fallback and error once migration to class based schema is done.
-		output = createNodeProxy(flexNode, false);
+		return (classSchema as { create(data: FlexTreeNode): TreeNode }).create(flexNode);
 	}
-	return output;
 }
 
 /**
@@ -1083,39 +1071,3 @@ export type FactoryContent =
  * Content which can be inserted into a tree.
  */
 export type InsertableContent = Unhydrated<TreeNode> | FactoryContent;
-
-function getArrayNodeChildNode(
-	arrayNode: FlexTreeFieldNode<FlexFieldNodeSchema>,
-	index: number,
-): FlexTreeNode | undefined {
-	const field = arrayNode.tryGetField(EmptyKey);
-	assert(
-		field?.schema.kind === FieldKinds.sequence,
-		0x7fc /* Expected sequence field when hydrating array node */,
-	);
-	return (field as FlexTreeSequenceField<FlexAllowedTypes>).boxedAt(index);
-}
-
-function getMapChildNode(
-	mapNode: FlexTreeMapNode<FlexMapNodeSchema>,
-	key: string,
-): FlexTreeNode | undefined {
-	const field = mapNode.getBoxed(key);
-	assert(
-		field.schema.kind === FieldKinds.optional,
-		0x7fd /* Sequence field kind is unsupported as map values */,
-	);
-	return (field as FlexTreeOptionalField<FlexAllowedTypes>).boxedContent;
-}
-
-function getObjectChildNode(objectNode: FlexTreeObjectNode, key: string): FlexTreeNode | undefined {
-	const field =
-		objectNode.tryGetField(brand(key)) ?? fail("Expected a field for inserted content");
-	assert(
-		field.schema.kind === FieldKinds.required || field.schema.kind === FieldKinds.optional,
-		0x7fe /* Expected required or optional field kind */,
-	);
-	return (
-		field as FlexTreeRequiredField<FlexAllowedTypes> | FlexTreeOptionalField<FlexAllowedTypes>
-	).boxedContent;
-}

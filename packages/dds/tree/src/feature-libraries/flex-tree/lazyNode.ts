@@ -5,64 +5,62 @@
 
 import { assert, unreachableCase } from "@fluidframework/core-utils";
 import {
-	Value,
 	Anchor,
-	FieldKey,
-	TreeNavigationResult,
-	ITreeSubscriptionCursor,
-	mapCursorFields,
-	CursorLocationType,
 	AnchorNode,
-	inCursorField,
-	rootFieldKey,
+	CursorLocationType,
 	EmptyKey,
+	FieldKey,
+	ITreeSubscriptionCursor,
+	TreeNavigationResult,
 	TreeNodeSchemaIdentifier,
-	forEachField,
 	TreeValue,
+	Value,
+	forEachField,
+	inCursorField,
+	mapCursorFields,
+	rootFieldKey,
 } from "../../core/index.js";
 import { brand, capitalize, disposeSymbol, fail, getOrCreate } from "../../util/index.js";
+import { FieldKinds } from "../default-schema/index.js";
+import { LocalNodeKey } from "../node-key/index.js";
 import {
+	Any,
+	FlexAllowedTypes,
+	FlexFieldNodeSchema,
 	FlexFieldSchema,
-	FlexTreeNodeSchema,
 	FlexMapNodeSchema,
+	FlexObjectNodeSchema,
+	FlexTreeNodeSchema,
+	LeafNodeSchema,
 	schemaIsFieldNode,
 	schemaIsLeaf,
 	schemaIsMap,
 	schemaIsObjectNode,
-	FlexFieldNodeSchema,
-	LeafNodeSchema,
-	FlexObjectNodeSchema,
-	Any,
-	FlexAllowedTypes,
 } from "../typed-schema/index.js";
-import { FieldKinds } from "../default-schema/index.js";
-import { LocalNodeKey } from "../node-key/index.js";
-import { EditableTreeEvents, TreeEvent } from "./treeEvents.js";
 import { Context } from "./context.js";
 import {
+	FlexTreeEntityKind,
+	FlexTreeField,
 	FlexTreeFieldNode,
 	FlexTreeLeafNode,
 	FlexTreeMapNode,
+	FlexTreeNode,
 	FlexTreeObjectNode,
 	FlexTreeObjectNodeTyped,
+	FlexTreeOptionalField,
+	FlexTreeRequiredField,
 	FlexTreeTypedField,
 	FlexTreeTypedNode,
 	FlexTreeUnboxField,
-	FlexTreeField,
-	FlexTreeNode,
-	TreeStatus,
-	FlexTreeRequiredField,
-	FlexTreeOptionalField,
 	FlexibleFieldContent,
 	FlexibleNodeContent,
-	FlexTreeEntityKind,
-	flexTreeMarker,
 	PropertyNameFromFieldKey,
+	TreeStatus,
+	flexTreeMarker,
 	reservedObjectNodeFieldPropertyNamePrefixes,
 	reservedObjectNodeFieldPropertyNames,
 	flexTreeSlot,
 } from "./flexTreeTypes.js";
-import { LazyNodeKeyField, makeField } from "./lazyField.js";
 import {
 	LazyEntity,
 	cursorSymbol,
@@ -70,6 +68,8 @@ import {
 	isFreedSymbol,
 	tryMoveCursorToAnchorSymbol,
 } from "./lazyEntity.js";
+import { LazyNodeKeyField, makeField } from "./lazyField.js";
+import { EditableTreeEvents, TreeEvent } from "./treeEvents.js";
 import { unboxedField } from "./unboxed.js";
 import { treeStatusFromAnchorCache } from "./utilities.js";
 

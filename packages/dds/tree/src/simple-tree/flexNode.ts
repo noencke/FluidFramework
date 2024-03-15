@@ -4,26 +4,26 @@
  */
 
 import { assert } from "@fluidframework/core-utils";
-import { fail } from "../util/index.js";
 import {
-	FlexObjectNodeSchema,
 	FlexFieldNodeSchema,
 	FlexMapNodeSchema,
-	FlexTreeNode,
-	FlexTreeObjectNode,
+	FlexObjectNodeSchema,
 	FlexTreeFieldNode,
 	FlexTreeMapNode,
+	FlexTreeNode,
+	FlexTreeObjectNode,
 	assertFlexTreeEntityNotFreed,
 	flexTreeSlot,
 	schemaIsMap,
 	schemaIsFieldNode,
 	schemaIsObjectNode,
 } from "../feature-libraries/index.js";
-import { AnchorNode, anchorSlot } from "../core/index.js";
-import { TreeNode, TypedNode } from "./types.js";
-import { TreeArrayNode } from "./treeArrayNode.js";
-import { TreeMapNode, TreeObjectNode } from "./schemaTypes.js";
+import { fail } from "../util/index.js";
+import { AnchorNode, anchorSlot } from "../index.js";
 import { RawTreeNode } from "./rawNode.js";
+import { TreeMapNode, TreeObjectNode } from "./schemaTypes.js";
+import { TreeArrayNode } from "./treeArrayNode.js";
+import { TreeNode, TypedNode } from "./types.js";
 
 /** TODO document */
 const proxySlot = anchorSlot<TreeNode>();
