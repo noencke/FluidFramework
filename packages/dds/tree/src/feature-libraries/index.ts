@@ -303,3 +303,5 @@ export { DetachedFieldIndexSummarizer } from "./detachedFieldIndexSummarizer.js"
 export { SchemaChange, makeSchemaChangeCodecs, EncodedSchemaChange } from "./schema-edits/index.js";
 
 export { makeMitigatedChangeFamily } from "./mitigatedChangeFamily.js";
+
+export { KeyFinder, IndexableTreeStatus, AnchorTreeIndex, TreeIndex } from "./indexing/index.js";

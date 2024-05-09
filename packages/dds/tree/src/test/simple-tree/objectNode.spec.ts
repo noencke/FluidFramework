@@ -11,6 +11,7 @@ import { SchemaFactory } from "../../simple-tree/index.js";
 
 import { hydrate } from "./utils.js";
 import { requireAssignableTo } from "../../util/index.js";
+import { Tree } from "../../shared-tree/index.js";
 
 const schemaFactory = new SchemaFactory("Test");
 
@@ -30,6 +31,7 @@ describe("ObjectNode", () => {
 
 			{
 				const n = hydrate(Schema, { toString: undefined });
+				const s = Tree.schema(n);
 				const x = n.toString;
 				assert.equal(x, undefined);
 			}

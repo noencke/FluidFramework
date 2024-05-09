@@ -75,3 +75,4 @@ export {
 	setField,
 } from "./objectNode.js";
 export { TreeMapNode } from "./mapNode.js";
+export { createIdentifierIndex } from "./identifierIndex.js";

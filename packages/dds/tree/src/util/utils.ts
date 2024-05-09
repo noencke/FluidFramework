@@ -161,7 +161,7 @@ export function getOrAddEmptyToMap<K, V>(map: MapGetSet<K, V[]>, key: K): V[] {
  * @param map - the transformation function to run on each element of the iterable
  * @returns a new iterable of elements which have been transformed by the `map` function
  */
-export function* mapIterable<T, U>(iterable: Iterable<T>, map: (t: T) => U): Iterable<U> {
+export function* mapIterable<T, U>(iterable: Iterable<T>, map: (t: T) => U): IterableIterator<U> {
 	for (const t of iterable) {
 		yield map(t);
 	}
