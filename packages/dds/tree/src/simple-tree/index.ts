@@ -39,7 +39,7 @@ export {
 	type ApplyKind,
 } from "./schemaTypes.js";
 export { SchemaFactory, type ScopedSchemaName } from "./schemaFactory.js";
-export { getFlexNode, tryDisposeTreeNode } from "./proxyBinding.js";
+export { getFlexNode, tryDisposeTreeNode, forestSlot } from "./proxyBinding.js";
 export { treeNodeApi, type TreeNodeApi } from "./treeNodeApi.js";
 export { toFlexSchema, cursorFromUnhydratedRoot } from "./toFlexSchema.js";
 export type {

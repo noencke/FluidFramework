@@ -5,7 +5,14 @@
 
 import { assert } from "@fluidframework/core-utils/internal";
 
-import { type AnchorNode, type AnchorSet, type UpPath, anchorSlot } from "../core/index.js";
+import {
+	type AnchorNode,
+	type AnchorSet,
+	IForestSubscription,
+	type MapTree,
+	type UpPath,
+	anchorSlot,
+} from "../core/index.js";
 import {
 	ContextSlot,
 	type FlexTreeNodeSchema,
@@ -64,6 +71,8 @@ export function anchorProxy(anchors: AnchorSet, path: UpPath, proxy: TreeNode): 
 	const anchor = anchors.track(path);
 	const anchorNode = anchors.locate(anchor) ?? fail("Expected anchor node to be present");
 	bindProxyToAnchorNode(proxy, anchorNode);
+	const forest = anchors.slots.get(forestSlot) ?? fail("Expected forest for anchor set");
+	getKernel(proxy).hydrate(forest, path);
 	const forget = (): void => {
 		if (anchors.locate(anchor)) {
 			anchors.forget(anchor);
@@ -186,7 +195,6 @@ function bindProxyToAnchorNode(proxy: TreeNode, anchorNode: AnchorNode): void {
 	proxyToAnchorNode.set(proxy, anchorNode);
 	// However, it's fine for an anchor node to rotate through different proxies when the content at that place in the tree is replaced.
 	anchorNode.slots.set(proxySlot, proxy);
-	getKernel(proxy).hydrate(anchorNode);
 }
 
 /**
@@ -194,12 +202,23 @@ function bindProxyToAnchorNode(proxy: TreeNode, anchorNode: AnchorNode): void {
  */
 type TypedNode<TSchema extends FlexTreeNodeSchema> = TreeNode & WithType<TSchema["name"]>;
 
-export function createKernel(node: TreeNode): void {
-	treeNodeToKernel.set(node, new TreeNodeKernel(node));
+export function createKernel(treeNode: TreeNode, flexNode: FlexTreeNode): void {
+	if (isMapTreeNode(flexNode)) {
+		// Nutrino Colonel
+		treeNodeToKernel.set(treeNode, new TreeNodeKernel(treeNode, flexNode.mapTree));
+	} else {
+		const anchorNode = flexNode.anchorNode;
+		const forest = flexNode.context.checkout.forest;
+		treeNodeToKernel.set(treeNode, new TreeNodeKernel(treeNode, forest, anchorNode));
+	}
+}
+
+export function tryGetKernel(node: TreeNode): TreeNodeKernel | undefined {
+	return treeNodeToKernel.get(node);
 }
 
 export function getKernel(node: TreeNode): TreeNodeKernel {
-	const kernel = treeNodeToKernel.get(node);
+	const kernel = tryGetKernel(node);
 	assert(kernel !== undefined, "Expected tree node to have kernel");
 	return kernel;
 }
@@ -214,3 +233,5 @@ export function tryDisposeTreeNode(anchorNode: AnchorNode): void {
 }
 
 const treeNodeToKernel = new WeakMap<TreeNode, TreeNodeKernel>();
+
+export const forestSlot = anchorSlot<IForestSubscription>();

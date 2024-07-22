@@ -16,6 +16,7 @@ import {
 	type FlexTreeNode,
 	type MapTreeNode,
 	isFlexTreeNode,
+	isMapTreeNode,
 	markEager,
 } from "../feature-libraries/index.js";
 import { tryGetSimpleNodeSchema } from "./schemaCaching.js";
@@ -358,9 +359,8 @@ export abstract class TreeNodeValid<TInput> extends TreeNode {
 			tryGetSimpleNodeSchema(node.schema) === schema,
 			0x83b /* building node with wrong schema */,
 		);
-
 		const result = schema.prepareInstance(this, node);
-		createKernel(result);
+		createKernel(result, node);
 		setFlexNode(result, node);
 		return result;
 	}

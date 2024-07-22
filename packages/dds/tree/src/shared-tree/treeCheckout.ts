@@ -58,6 +58,7 @@ import { type IDisposable, TransactionResult, disposeSymbol, fail } from "../uti
 import { SharedTreeChangeFamily, hasSchemaChange } from "./sharedTreeChangeFamily.js";
 import type { SharedTreeChange } from "./sharedTreeChangeTypes.js";
 import type { ISharedTreeEditor, SharedTreeEditBuilder } from "./sharedTreeEditBuilder.js";
+import { forestSlot } from "../simple-tree/index.js";
 
 /**
  * Events for {@link ITreeCheckout}.
@@ -418,6 +419,7 @@ export class TreeCheckout implements ITreeCheckoutFork {
 		/** Optional logger for telemetry. */
 		private readonly logger?: ITelemetryLoggerExt,
 	) {
+		forest.anchors.slots.set(forestSlot, forest);
 		// when a transaction is started, take a snapshot of the current state of removed roots
 		branch.on("transactionStarted", () => {
 			this.removedRootsSnapshots.push(this.removedRoots.clone());

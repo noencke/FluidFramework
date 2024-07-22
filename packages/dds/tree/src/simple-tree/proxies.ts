@@ -27,7 +27,7 @@ import {
 } from "../feature-libraries/index.js";
 import { type Mutable, fail, isReadonlyArray } from "../util/index.js";
 
-import { anchorProxy, tryGetFlexNode, tryGetProxy } from "./proxyBinding.js";
+import { anchorProxy, tryGetKernel, tryGetProxy } from "./proxyBinding.js";
 import { tryGetSimpleNodeSchema } from "./schemaCaching.js";
 import type { TreeNode, Unhydrated } from "./types.js";
 
@@ -43,10 +43,10 @@ import type { TreeNode, Unhydrated } from "./types.js";
  * Primitives will always return false (as they are copies of data, not references to nodes).
  *
  * @param candidate - Value which may be a TreeNode
- * @returns true if the given 'candidate' is a hydrated TreeNode.
+ * @returns true if the given 'candidate' is a TreeNode.
  */
 export function isTreeNode(candidate: unknown): candidate is TreeNode | Unhydrated<TreeNode> {
-	return tryGetFlexNode(candidate) !== undefined;
+	return tryGetKernel(candidate as TreeNode) !== undefined;
 }
 
 /**
