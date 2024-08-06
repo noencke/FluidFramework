@@ -176,8 +176,7 @@ abstract class CustomMapNodeBase<const T extends ImplicitAllowedTypes> extends T
 		);
 
 		prepareContentForHydration(mapTree, node.context.checkout.forest);
-		const cursor = mapTree !== undefined ? cursorForMapTreeNode(mapTree) : undefined;
-		node.set(key, cursor);
+		node.set(key, cursorForMapTreeNode(mapTree));
 		return this;
 	}
 	public get size(): number {

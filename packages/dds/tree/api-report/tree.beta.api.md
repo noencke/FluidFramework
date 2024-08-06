@@ -143,7 +143,7 @@ declare namespace InternalTypes {
         TreeArrayNodeBase,
         ScopedSchemaName,
         DefaultProvider,
-        typeNameSymbol_2 as typeNameSymbol,
+        typeNameSymbol,
         InsertableObjectFromSchemaRecord,
         ObjectFromSchemaRecord,
         FieldHasDefaultUnsafe,
@@ -423,7 +423,7 @@ export interface TreeMapNodeUnsafe<T extends Unenforced<ImplicitAllowedTypes>> e
 export abstract class TreeNode implements WithType {
     static [Symbol.hasInstance](value: unknown): value is TreeNode;
     static [Symbol.hasInstance]<TSchema extends abstract new (...args: any[]) => TreeNode>(this: TSchema, value: unknown): value is InstanceType<TSchema>;
-    abstract get [typeNameSymbol_2](): string;
+    abstract get [typeNameSymbol](): string;
     protected constructor();
 }
 
@@ -511,7 +511,7 @@ export interface TreeViewEvents {
 }
 
 // @public
-const typeNameSymbol_2: unique symbol;
+const typeNameSymbol: unique symbol;
 
 // @public
 export type Unenforced<_DesiredExtendsConstraint> = unknown;
@@ -532,7 +532,7 @@ export type ValidateRecursiveSchema<T extends TreeNodeSchemaClass<string, NodeKi
 
 // @public @sealed
 export interface WithType<TName extends string = string> {
-    get [typeNameSymbol_2](): TName;
+    get [typeNameSymbol](): TName;
 }
 
 // (No @packageDocumentation comment for this package)
