@@ -14,30 +14,23 @@ export interface GoalCreationParameters {
 	commentsPerGoal: number;
 }
 
-export function createGoals(
+export function createGoalList(
 	params: GoalCreationParameters,
-): Promise<GoalList> & { progress: number } {
-	let i = 0;
-	const promise = new Promise((resolve) => {
-		const goals: Goal[] = [];
-		while (i < params.goalCount) {
-			goals.push(createGoal(params, false));
-			i += 1;
-		}
-
-		resolve(
-			new GoalList({
-				id: randomId(),
-				title: randomString(params.goalTitleLength),
-				description: handle(),
-				topLevelGoals: goals,
-				customColumns: [], // TODO
-			}),
-		);
+	onGoalCreated?: (goal: Goal) => void,
+): GoalList {
+	const goals: Goal[] = [];
+	for (let i = 0; i < params.goalCount; i++) {
+		const goal = createGoal(params, false);
+		goals.push(goal);
+		onGoalCreated?.(goal);
+	}
+	return new GoalList({
+		id: randomId(),
+		title: randomString(params.goalTitleLength),
+		description: handle(),
+		topLevelGoals: goals,
+		customColumns: [], // TODO
 	});
-
-	void Object.defineProperty(promise, "progress", { get: () => i / params.goalCount });
-	return promise as Promise<GoalList> & { progress: number };
 }
 
 function createGoal(params: GoalCreationParameters, isSubgoal: boolean): Goal {
