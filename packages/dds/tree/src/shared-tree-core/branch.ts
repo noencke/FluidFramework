@@ -24,7 +24,7 @@ import {
 import { EventEmitter, type Listenable } from "../events/index.js";
 
 import { TransactionStack } from "./transactionStack.js";
-import { fail } from "../util/index.js";
+import { fail, hasElement, type Mutable } from "../util/index.js";
 
 /**
  * Describes a change to a `SharedTreeBranch`. Various operations can mutate the head of the branch;
@@ -101,8 +101,7 @@ export function getChangeReplaceType(
 /**
  * The events emitted by a `SharedTreeBranch`
  */
-export interface SharedTreeBranchEvents<TEditor extends ChangeFamilyEditor, TChange>
-	extends BranchTrimmingEvents {
+export interface SharedTreeBranchEvents<TEditor extends ChangeFamilyEditor, TChange> {
 	/**
 	 * Fired just before the head of this branch changes.
 	 * @param change - the change to this branch's state and commits
@@ -153,23 +152,17 @@ export interface SharedTreeBranchEvents<TEditor extends ChangeFamilyEditor, TCha
 	 * as opposed to a nested transaction.
 	 */
 	transactionCommitted(isOuterTransaction: boolean): void;
-}
 
-/**
- * Events related to branch trimming.
- *
- * @remarks
- * Trimming is a very specific kind of mutation which is the only allowed mutations to branches.
- * References to commits from other commits are removed so that the commit objects can be GC'd by the JS engine.
- * This happens by changing a commit's parent property to undefined, which drops all commits that are in its "ancestry".
- * It is done as a performance optimization when it is determined that commits are no longer needed for future computation.
- */
-export interface BranchTrimmingEvents {
 	/**
-	 * Fired when some contiguous range of commits beginning with the "global tail" of this branch are trimmed from the branch.
-	 * This happens by deleting the parent pointer to the last commit in that range. This event can be fired at any time.
+	 * Fired when the tail of this branch is trimmed.
+	 * @remarks The trimmed tail is a contiguous range of commits beginning with the current tail (i.e. the commit farthest from the head, and the only commit which has no parent).
+	 * All branches whose ancestry includes any commit in the trimmed tail will fire this event.
+	 * @param trimmedRevisions - The revisions of the (one or more) commits that were trimmed
 	 */
-	ancestryTrimmed(trimmedRevisions: RevisionTag[]): void;
+	ancestryTrimmed(args: {
+		newTail: GraphCommit<TChange>;
+		trimmedRevisions: [RevisionTag, ...RevisionTag[]];
+	}): void;
 }
 
 /**
@@ -205,7 +198,6 @@ export class SharedTreeBranch<
 	 */
 	private readonly initialTransactionRevToRebasedRev = new Map<RevisionTag, RevisionTag>();
 	private disposed = false;
-	private readonly unsubscribeBranchTrimmer?: () => void;
 	/**
 	 * Construct a new branch.
 	 * @param head - the head of the branch
@@ -217,22 +209,20 @@ export class SharedTreeBranch<
 		private head: GraphCommit<TChange>,
 		public readonly changeFamily: ChangeFamily<TEditor, TChange>,
 		private readonly mintRevisionTag: () => RevisionTag,
-		private readonly branchTrimmer?: Listenable<BranchTrimmingEvents>,
 		private readonly telemetryEventBatcher?: TelemetryEventBatcher<
 			keyof RebaseStatsWithDuration
 		>,
 	) {
 		super();
+		setTail(head, this);
 		this.editor = this.changeFamily.buildEditor(mintRevisionTag, (change) =>
 			this.apply(change),
 		);
-		this.unsubscribeBranchTrimmer = branchTrimmer?.on("ancestryTrimmed", (commit) => {
-			this.emit("ancestryTrimmed", commit);
-		});
 	}
 
 	/**
 	 * Sets the head of this branch. Emits no change events.
+	 * @param head - The new head of this branch, of which the current head must be an ancestor.
 	 */
 	public setHead(head: GraphCommit<TChange>): void {
 		this.assertNotDisposed();
@@ -429,12 +419,7 @@ export class SharedTreeBranch<
 	 */
 	public fork(commit: GraphCommit<TChange> = this.head): SharedTreeBranch<TEditor, TChange> {
 		this.assertNotDisposed();
-		const fork = new SharedTreeBranch(
-			commit,
-			this.changeFamily,
-			this.mintRevisionTag,
-			this.branchTrimmer,
-		);
+		const fork = new SharedTreeBranch(commit, this.changeFamily, this.mintRevisionTag);
 		this.emit("fork", fork);
 		return fork;
 	}
@@ -566,6 +551,38 @@ export class SharedTreeBranch<
 	}
 
 	/**
+	 * Remove some tail of commits from this branch.
+	 * @param newTail - The commit that will become the new tail (i.e. the commit farthest from the head, and which has no parent) of this branch.
+	 * It must be part of this branch's ancestry.
+	 * All commits in the ancestry of `newTail` will be removed from this branch (`newTail` will have its parent property deleted) and their corresponding revisions will be passed to the `ancestryTrimmed` event.
+	 * If `newTail` is already the tail commit of this branch, this method has no effect.
+	 */
+	public trim(newTail: RevisionTag | GraphCommit<TChange>): void {
+		this.assertNotDisposed();
+		const newTailCommit =
+			typeof newTail === "string" || typeof newTail === "number"
+				? findAncestor(this.getHead(), (c) => c.revision === newTail)
+				: newTail;
+
+		assert(newTailCommit !== undefined, "New tail must be part of this branch's ancestry");
+		const path: GraphCommit<TChange>[] = [];
+		const oldTailCommit = findAncestor([newTailCommit, path]);
+		if (oldTailCommit !== newTailCommit) {
+			// For a branch A-B-...-C-D where `newTail` is D, `path` will be [B, ... C, D].
+			// We want [A, B, ... C], so put A (`oldTail`) at the front and remove D (`newTail`) from the end.
+			assert(path.pop() === newTailCommit, "Expected new tail to be at the end of path");
+			const trimmedRevisions = Array.from(path, (c) => c.revision);
+			trimmedRevisions.unshift(oldTailCommit.revision);
+			assert(hasElement(trimmedRevisions), "Expected at least one revision to be trimmed");
+			delete (newTailCommit as Mutable<typeof newTailCommit>).parent;
+			for (const branch of tails.get(oldTailCommit) ?? []) {
+				branch.emit("ancestryTrimmed", { newTail: newTailCommit, trimmedRevisions });
+			}
+			setTail(newTailCommit, this);
+		}
+	}
+
+	/**
 	 * Dispose this branch, freezing its state.
 	 *
 	 * @remarks
@@ -581,8 +598,6 @@ export class SharedTreeBranch<
 		while (this.isTransacting()) {
 			this.abortTransaction();
 		}
-
-		this.unsubscribeBranchTrimmer?.();
 
 		this.disposed = true;
 		this.emit("dispose");
@@ -613,4 +628,25 @@ export function onForkTransitive<T extends Listenable<{ fork: (t: T) => void }>>
 		}),
 	);
 	return () => offs.forEach((off) => off());
+}
+
+const tails = new WeakMap<
+	GraphCommit<unknown>,
+	// SharedTreeBranch is invariant over TChange, so neither `never` nor `unknown` can be used as the type argument.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	Set<SharedTreeBranch<ChangeFamilyEditor, any>>
+>();
+
+function setTail(
+	commit: GraphCommit<unknown>,
+	// SharedTreeBranch is invariant over TChange, so neither `never` nor `unknown` can be used as the type argument.
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	branch: SharedTreeBranch<ChangeFamilyEditor, any>,
+): void {
+	const branchSet = tails.get(commit);
+	if (branchSet === undefined) {
+		tails.set(commit, new Set([branch]));
+	} else {
+		branchSet.add(branch);
+	}
 }

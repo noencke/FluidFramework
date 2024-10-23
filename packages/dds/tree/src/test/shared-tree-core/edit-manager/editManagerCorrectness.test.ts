@@ -182,7 +182,7 @@ export function testCorrectness() {
 			describe("Trunk eviction", () => {
 				it("Evicts trunk commits according to a provided minimum sequence number", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					for (let i = 1; i <= 10; ++i) {
 						const commit = applyLocalCommit(manager);
@@ -212,7 +212,7 @@ export function testCorrectness() {
 
 				it("Evicts trunk commits at exactly the minimum sequence number", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const commit1 = applyLocalCommit(manager);
 					expectedTrimmedRevisions.add(commit1.revision);
@@ -237,7 +237,7 @@ export function testCorrectness() {
 				it("Rebases peer branches", () => {
 					// This is a regression test that ensures peer branches are rebased up to at least the new tail of the trunk after trunk commits are evicted.
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					// First, we receive a commit from a peer ("1").
 					const peerCommit1 = peerCommit(peer1, [], 1);
@@ -271,7 +271,7 @@ export function testCorrectness() {
 
 				it("Evicts properly when the minimum sequence number advances past the trunk (and there are no local commits)", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const commit1 = applyLocalCommit(manager, [], 1);
 					expectedTrimmedRevisions.add(commit1.revision);
@@ -285,7 +285,7 @@ export function testCorrectness() {
 
 				it("Evicts properly when the minimum sequence number advances past the trunk (and there are local commits)", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const commit1 = applyLocalCommit(manager, [], 1);
 					expectedTrimmedRevisions.add(commit1.revision);
@@ -300,7 +300,7 @@ export function testCorrectness() {
 
 				it("Delays eviction of a branch base commit until the branch is disposed", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const commit1 = applyLocalCommit(manager, [], 1);
 					expectedTrimmedRevisions.add(commit1.revision);
@@ -320,7 +320,7 @@ export function testCorrectness() {
 
 				it("Evicts after the oldest branch rebases (fast-forward)", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const local1 = applyLocalCommit(manager, [], 1);
 					const fork1 = manager.localBranch.fork();
@@ -365,7 +365,7 @@ export function testCorrectness() {
 
 				it("Evicts after the oldest branch rebases (no fast-forward)", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const local1 = applyLocalCommit(manager, [], 2);
 					const fork1 = manager.localBranch.fork();
@@ -417,7 +417,7 @@ export function testCorrectness() {
 
 				it("Evicts properly when changes come in batches having the same sequence number", () => {
 					const { manager } = testChangeEditManagerFactory({});
-					const trimmedCommits = trackTrimmed(manager.localBranch);
+					const trimmedCommits = trackEvicted(manager.localBranch);
 					const expectedTrimmedRevisions = new Set<RevisionTag>();
 					const peerCommit1 = peerCommit(peer1, [], 1);
 					expectedTrimmedRevisions.add(peerCommit1.revision);
@@ -716,12 +716,15 @@ function peerCommit(
 	};
 }
 
-function trackTrimmed(
+function trackEvicted(
 	branch: SharedTreeBranch<ChangeFamilyEditor, TestChange>,
 ): ReadonlySet<RevisionTag> {
 	const trimmedCommits = new Set<RevisionTag>();
-	branch.on("ancestryTrimmed", (trimmedRevisions) => {
-		trimmedRevisions.forEach((revision) => trimmedCommits.add(revision));
+	branch.on("ancestryTrimmed", ({ trimmedRevisions, newTail }) => {
+		// Compute the set of trimmed commits that were removed from the _trunk_, which is not quite the same as the set of commits removed from the branch.
+		// In particular, the trunk already ignored the "trunk base" commit (the first commit in `trimmedRevisions`) and it considers the new trunk base (`newTail`) to be evicted as well.
+		trimmedRevisions.slice(1).forEach((revision) => trimmedCommits.add(revision));
+		trimmedCommits.add(newTail.revision);
 	});
 	return trimmedCommits;
 }

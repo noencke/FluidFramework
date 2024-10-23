@@ -586,19 +586,23 @@ export class TreeCheckout implements ITreeCheckoutFork {
 
 		// When the branch is trimmed, we can garbage collect any repair data whose latest relevant revision is one of the
 		// trimmed revisions.
-		_branch.on("ancestryTrimmed", (revisions) => {
+		_branch.on("ancestryTrimmed", ({ trimmedRevisions, newTail }) => {
 			this.withCombinedVisitor((visitor) => {
-				revisions.forEach((revision) => {
+				const remove = (revision: RevisionTag): void => {
 					// get all the roots last created or used by the revision
 					const roots = this.removedRoots.getRootsLastTouchedByRevision(revision);
-
 					// get the detached field for the root and delete it from the removed roots
 					for (const root of roots) {
 						visitor.destroy(this.removedRoots.toFieldKey(root), 1);
 					}
 
 					this.removedRoots.deleteRootsLastTouchedByRevision(revision);
-				});
+				};
+				for (const revision of trimmedRevisions) {
+					remove(revision);
+				}
+				// This code assumes that the new tail commit is not part of the trunk (the EditManager retains a "trunk base" commit that is not trimmed).
+				remove(newTail.revision);
 			});
 		});
 	}

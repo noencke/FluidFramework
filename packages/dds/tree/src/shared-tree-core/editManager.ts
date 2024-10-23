@@ -19,14 +19,9 @@ import {
 	type RebaseStatsWithDuration,
 	tagChange,
 } from "../core/index.js";
-import { type Mutable, brand, fail, getOrCreate, mapIterable } from "../util/index.js";
+import { brand, fail, getOrCreate, mapIterable } from "../util/index.js";
 
-import {
-	SharedTreeBranch,
-	type BranchTrimmingEvents,
-	getChangeReplaceType,
-	onForkTransitive,
-} from "./branch.js";
+import { SharedTreeBranch, getChangeReplaceType, onForkTransitive } from "./branch.js";
 import type {
 	Commit,
 	SeqNumber,
@@ -41,7 +36,6 @@ import {
 	minSequenceId,
 	sequenceIdComparator,
 } from "./sequenceIdUtils.js";
-import { createEmitter } from "../events/index.js";
 import {
 	TelemetryEventBatcher,
 	measure,
@@ -76,8 +70,6 @@ export class EditManager<
 	TChangeset,
 	TChangeFamily extends ChangeFamily<TEditor, TChangeset>,
 > {
-	private readonly _events = createEmitter<BranchTrimmingEvents>();
-
 	/** The "trunk" branch. The trunk represents the list of received sequenced changes. */
 	private readonly trunk: SharedTreeBranch<TEditor, TChangeset>;
 
@@ -87,7 +79,7 @@ export class EditManager<
 	 */
 	private readonly trunkMetadata = new Map<
 		RevisionTag,
-		{ sequenceId: SequenceId; sessionId: SessionId }
+		{ commit: GraphCommit<TChangeset>; sequenceId: SequenceId; sessionId: SessionId }
 	>();
 	/**
 	 * A map from a sequence id to the commit in the {@link trunk} which has that sequence id.
@@ -180,14 +172,12 @@ export class EditManager<
 			this.trunkBase,
 			changeFamily,
 			mintRevisionTag,
-			this._events,
 			this.telemetryEventBatcher,
 		);
 		this.localBranch = new SharedTreeBranch(
 			this.trunk.getHead(),
 			changeFamily,
 			mintRevisionTag,
-			this._events,
 			this.telemetryEventBatcher,
 		);
 
@@ -203,6 +193,46 @@ export class EditManager<
 					this.trunk.getHead(),
 				);
 			}
+		});
+
+		this.localBranch.on("ancestryTrimmed", ({ newTail }) => {
+			const newTrunkBase = newTail;
+			assert(newTrunkBase !== undefined, "Expected new trunk base to be in trunk");
+			const sequenceId = this.trunkMetadata.get(newTrunkBase.revision)?.sequenceId;
+
+			assert(sequenceId !== undefined, "Expected sequence id for new trunk base");
+
+			// The metadata for new trunk base revision needs to be deleted before modifying it.
+			this.trunkMetadata.delete(newTrunkBase.revision);
+			this.trunkBase = newTrunkBase;
+
+			// Update any state that is derived from trunk commits
+			this.sequenceMap.editRange(minimumPossibleSequenceId, sequenceId, true, (s, c) => {
+				// Cleanup look-aside data for each evicted commit
+				this.trunkMetadata.delete(c.revision);
+				// Delete all evicted commits from `sequenceMap` except for the latest one, which is the new `trunkBase`
+				if (equalSequenceIds(s, sequenceId)) {
+					assert(
+						c === this.trunkBase,
+						0x729 /* Expected last evicted commit to be new trunk base */,
+					);
+				} else {
+					return { delete: true };
+				}
+			});
+
+			const trunkSize = getPathFromBase(this.trunk.getHead(), this.trunkBase).length;
+			if (this.sequenceMap.size !== trunkSize + 1) {
+				debugger;
+			}
+			assert(
+				this.sequenceMap.size === trunkSize + 1,
+				0x744 /* The size of the sequenceMap must have one element more than the trunk */,
+			);
+			assert(
+				this.trunkMetadata.size === trunkSize,
+				0x745 /* The size of the trunkMetadata must be the same as the trunk */,
+			);
 		});
 
 		// Track all forks of the local branch for purposes of trunk eviction. Unlike the local branch, they have
@@ -340,7 +370,7 @@ export class EditManager<
 			);
 		}
 
-		const [sequenceId, latestEvicted] = this.getClosestTrunkCommit(
+		const [, newTrunkBase] = this.getClosestTrunkCommit(
 			maxSequenceId(
 				trunkTailSequenceId,
 				this.sequenceMap.minKey() ?? minimumPossibleSequenceId,
@@ -348,64 +378,15 @@ export class EditManager<
 		);
 
 		// Don't do any work if the commit found by the search is already the tail of the trunk
-		if (latestEvicted !== this.trunkBase) {
+		if (newTrunkBase !== this.trunkBase) {
 			// The minimum sequence number informs us that all peer branches are at least caught up to the tail commit,
 			// so rebase them accordingly. This is necessary to prevent peer branches from referencing any evicted commits.
 			for (const [, branch] of this.peerLocalBranches) {
-				branch.rebaseOnto(this.trunk, latestEvicted);
+				branch.rebaseOnto(this.trunk, newTrunkBase);
 			}
-
-			// This mutation is a performance hack. If commits are truly immutable, then changing the trunk's tail requires
-			// regenerating the entire commit graph. Instead, we can simply chop off the tail like this if we're certain
-			// that there are no outstanding references to any of the commits being removed (other than the references via
-			// the trunk). The peer branches have been rebased to the head of the trunk, the local branch is already rebased
-			// to the head of the trunk, and all other branches are tracked by `trunkBranches` and known to be ahead of or at
-			// `newTrunkBase`. Therefore, no branches should have unique references to any of the commits being evicted here.
-			// We mutate the most recent of the evicted commits to become the new trunk base. That way, any other commits that
-			// have parent pointers to the latest evicted commit will stay linked, even though that it is no longer part of the trunk.
-			const newTrunkBase = latestEvicted as Mutable<typeof latestEvicted>;
-			// The metadata for new trunk base revision needs to be deleted before modifying it.
-			this.trunkMetadata.delete(newTrunkBase.revision);
-			// collect the revisions that will be trimmed to send as part of the branch trimmed event
-			const trimmedRevisions: RevisionTag[] = getPathFromBase(
-				newTrunkBase,
-				this.trunkBase,
-			).map((c) => c.revision);
-			// Dropping the parent field removes (transitively) all references to the evicted commits so they can be garbage collected.
-			delete newTrunkBase.parent;
-			this.trunkBase = newTrunkBase;
-
-			// Update any state that is derived from trunk commits
-			this.sequenceMap.editRange(
-				minimumPossibleSequenceId,
-				sequenceId,
-				true,
-				(s, { revision }) => {
-					// Cleanup look-aside data for each evicted commit
-					this.trunkMetadata.delete(revision);
-					// Delete all evicted commits from `sequenceMap` except for the latest one, which is the new `trunkBase`
-					if (equalSequenceIds(s, sequenceId)) {
-						assert(
-							revision === newTrunkBase.revision,
-							0x729 /* Expected last evicted commit to be new trunk base */,
-						);
-					} else {
-						return { delete: true };
-					}
-				},
-			);
-
-			const trunkSize = getPathFromBase(this.trunk.getHead(), this.trunkBase).length;
-			assert(
-				this.sequenceMap.size === trunkSize + 1,
-				0x744 /* The size of the sequenceMap must have one element more than the trunk */,
-			);
-			assert(
-				this.trunkMetadata.size === trunkSize,
-				0x745 /* The size of the trunkMetadata must be the same as the trunk */,
-			);
-
-			this._events.emit("ancestryTrimmed", trimmedRevisions);
+			// Trim all commits behind the commit that will become the new trunk base
+			// TODO: it's weird that we trim the local branch here and not the trunk... but things outside editmanager listen to the local branch rather than the trunk
+			this.localBranch.trim(newTrunkBase);
 		}
 	}
 
@@ -498,10 +479,6 @@ export class EditManager<
 			this.isEmpty(),
 			0x68a /* Attempted to load from summary after edit manager was already mutated */,
 		);
-		// Record the tags of each trunk commit as we generate the trunk so they can be looked up quickly
-		// when hydrating the peer branches below
-		const trunkRevisionCache = new Map<RevisionTag, GraphCommit<TChangeset>>();
-		trunkRevisionCache.set(this.trunkBase.revision, this.trunkBase);
 		this.trunk.setHead(
 			data.trunk.reduce((base, c) => {
 				const sequenceId: SequenceId =
@@ -516,10 +493,10 @@ export class EditManager<
 				const commit = mintCommit(base, c);
 				this.sequenceMap.set(sequenceId, commit);
 				this.trunkMetadata.set(c.revision, {
+					commit,
 					sequenceId,
 					sessionId: c.sessionId,
 				});
-				trunkRevisionCache.set(c.revision, commit);
 				return commit;
 			}, this.trunkBase),
 		);
@@ -527,10 +504,7 @@ export class EditManager<
 		this.localBranch.setHead(this.trunk.getHead());
 
 		for (const [sessionId, branch] of data.peerLocalBranches) {
-			const commit =
-				trunkRevisionCache.get(branch.base) ??
-				fail("Expected summary branch to be based off of a revision in the trunk");
-
+			const commit = this.trunkMetadata.get(branch.base)?.commit ?? this.trunkBase;
 			this.peerLocalBranches.set(
 				sessionId,
 				new SharedTreeBranch(
@@ -685,13 +659,13 @@ export class EditManager<
 
 	private pushGraphCommitToTrunk(
 		sequenceId: SequenceId,
-		graphCommit: GraphCommit<TChangeset>,
+		commit: GraphCommit<TChangeset>,
 		sessionId: SessionId,
 	): void {
-		this.trunk.setHead(graphCommit);
+		this.trunk.setHead(commit);
 		const trunkHead = this.trunk.getHead();
 		this.sequenceMap.set(sequenceId, trunkHead);
-		this.trunkMetadata.set(trunkHead.revision, { sequenceId, sessionId });
+		this.trunkMetadata.set(trunkHead.revision, { commit, sequenceId, sessionId });
 	}
 
 	/**

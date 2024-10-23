@@ -486,3 +486,42 @@ export function capitalize<S extends string>(s: S): Capitalize<S> {
 export function compareStrings<T extends string>(a: T, b: T): number {
 	return a > b ? 1 : a === b ? 0 : -1;
 }
+
+/**
+ * Check whether or not an array has at least one element.
+ * @param array - The array to examine.
+ * @remarks This function is a type guard that narrows the type of the array to a non-empty array.
+ * This makes it type-safe to access the first element of the array, or to access the last element of the array via {@link getLast}.
+ * @example
+ * ```typescript
+ * const array: string[] = ["foo"];
+ * const maybeDefined = array[0]; // The type of `maybeDefined` is `string | undefined`.
+ * if (hasElement(array)) {
+ *     const defined = array[0]; // The type of `defined` is `string`.
+ * }
+ * ```
+ * @example
+ * ```typescript
+ * const array: string[] = ["foo"];
+ * const maybeDefined = getLast(array); // The type of `maybeDefined` is `string | undefined`.
+ * if (hasElement(array)) {
+ *     const defined = getLast(array); // The type of `defined` is `string`.
+ * }
+ * ```
+ */
+export function hasElement<T>(array: T[]): array is [T, ...T[]];
+export function hasElement<T>(array: readonly T[]): array is readonly [T, ...T[]];
+export function hasElement<T>(array: readonly T[]): array is [T, ...T[]] {
+	return array.length > 0;
+}
+
+/**
+ * Return the last element of an array.
+ * @param array - The array from which to read the last element.
+ * @remarks This function will return a value that is known to be defined {@link hasElement | if the array is known to be non-empty}.
+ */
+export function getLast<T>(array: readonly [T, ...T[]]): T;
+export function getLast<T>(array: readonly T[]): T | undefined;
+export function getLast<T>(array: readonly T[]): T | undefined {
+	return array[array.length - 1];
+}

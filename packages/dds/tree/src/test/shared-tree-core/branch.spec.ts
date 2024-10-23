@@ -43,7 +43,7 @@ describe("Branches", () => {
 		const tag1 = change(branch);
 		const tag2 = change(branch);
 		// Ensure that the commits are in the correct order with the correct tags
-		assertHistory(branch, tag1, tag2);
+		assertHistory(branch, nullRevisionTag, tag1, tag2);
 	});
 
 	it("that are forks are isolated from their parent's changes", () => {
@@ -81,7 +81,7 @@ describe("Branches", () => {
 		child.rebaseOnto(parent);
 		assertBased(child, parent);
 		// Ensure that the changes are now present on the child
-		assertHistory(child, tag1, tag2);
+		assertHistory(child, nullRevisionTag, tag1, tag2);
 	});
 
 	it("rebase changes from a parent onto a child", () => {
@@ -95,7 +95,7 @@ describe("Branches", () => {
 		parent.rebaseOnto(child);
 		assertBased(parent, child);
 		// Ensure that the changes are now present on the parent
-		assertHistory(parent, tag1, tag2);
+		assertHistory(parent, nullRevisionTag, tag1, tag2);
 	});
 
 	it("rebase changes up to a certain commit", () => {
@@ -112,7 +112,7 @@ describe("Branches", () => {
 
 		child.rebaseOnto(parent, parentCommit1);
 		// Ensure that the changes are now present on the child
-		assertHistory(child, tag1);
+		assertHistory(child, nullRevisionTag, tag1);
 	});
 
 	it("merge changes from a child into a parent", () => {
@@ -125,7 +125,7 @@ describe("Branches", () => {
 		// Merge the changes into the parent
 		parent.merge(child);
 		// Ensure that the changes are now present on the parent
-		assertHistory(parent, tag1, tag2);
+		assertHistory(parent, nullRevisionTag, tag1, tag2);
 	});
 
 	it("merge changes from a parent into a child", () => {
@@ -138,7 +138,7 @@ describe("Branches", () => {
 		// Merge the changes into the child
 		child.merge(parent);
 		// Ensure that the changes are now present on the child
-		assertHistory(child, tag1, tag2);
+		assertHistory(child, nullRevisionTag, tag1, tag2);
 	});
 
 	it("correctly merge after being merged", () => {
@@ -152,10 +152,10 @@ describe("Branches", () => {
 		// Merge the child into the parent, and then apply a new change to the parent
 		parent.merge(child);
 		const tagParent2 = change(parent);
-		assertHistory(parent, tagParent, tagChild, tagParent2);
+		assertHistory(parent, nullRevisionTag, tagParent, tagChild, tagParent2);
 		// Merge the parent into the child. `tagChild` is on both branches, but should be deduplicated.
 		child.merge(parent);
-		assertHistory(child, tagChild, tagParent, tagParent2);
+		assertHistory(child, nullRevisionTag, tagChild, tagParent, tagParent2);
 	});
 
 	it("correctly rebase after being merged", () => {
@@ -169,12 +169,12 @@ describe("Branches", () => {
 		// Merge the child into the parent, and then apply a new change to the parent
 		parent.merge(child);
 		const tagParent2 = change(parent);
-		assertHistory(parent, tagParent, tagChild, tagParent2);
+		assertHistory(parent, nullRevisionTag, tagParent, tagChild, tagParent2);
 		// Apply a change to the child, then rebase the child onto the parent. The child should now be based on the parent's latest commit.
 		const tagChild2 = change(child);
 		child.rebaseOnto(parent);
 		assertBased(child, parent);
-		assertHistory(child, tagParent, tagChild, tagParent2, tagChild2);
+		assertHistory(child, nullRevisionTag, tagParent, tagChild, tagParent2, tagChild2);
 	});
 
 	it("emit a change event after each change", () => {
@@ -551,7 +551,7 @@ describe("Branches", () => {
 		const tag1 = change(branch);
 		const tag2 = change(branch);
 		// Ensure that the commits are in the correct order with the correct tags
-		assertHistory(branch, tag1, tag2);
+		assertHistory(branch, nullRevisionTag, tag1, tag2);
 		// Commit the transaction and ensure that there is now only one commit on the branch
 		branch.commitTransaction();
 		assert.equal(branch.getHead().parent?.revision, nullRevisionTag);
@@ -566,7 +566,7 @@ describe("Branches", () => {
 		const tag2 = change(branch);
 		const tag3 = change(branch);
 		// Ensure that the commits are in the correct order with the correct tags
-		assertHistory(branch, tag1, tag2, tag3);
+		assertHistory(branch, nullRevisionTag, tag1, tag2, tag3);
 		// Abort the transaction and ensure that there is now only one commit on the branch
 		branch.abortTransaction();
 		assert.equal(branch.getHead().revision, tag1);
@@ -698,6 +698,61 @@ describe("Branches", () => {
 		});
 	});
 
+	describe("branch trimming", () => {
+		it("trims a branch to a specific commit", () => {
+			const branch = create();
+			const tag1 = change(branch);
+			const tag2 = change(branch);
+			const tag3 = change(branch);
+			const tag4 = change(branch);
+			const tag5 = change(branch);
+			assertHistory(branch, nullRevisionTag, tag1, tag2, tag3, tag4, tag5);
+			// Trim all commits before the existing tail (should do nothing):
+			branch.trim(nullRevisionTag);
+			assertHistory(branch, nullRevisionTag, tag1, tag2, tag3, tag4, tag5);
+			// Trim just the tail commit:
+			branch.trim(tag1);
+			assertHistory(branch, tag1, tag2, tag3, tag4, tag5);
+			// Trim the last two commits:
+			branch.trim(tag3);
+			assertHistory(branch, tag3, tag4, tag5);
+			// Trim everything behind the head commit:
+			branch.trim(tag5);
+			assertHistory(branch, tag5);
+		});
+
+		it("fires an event for the branch that called trim", () => {
+			const branch = create();
+			const tag1 = change(branch);
+			const tag2 = change(branch);
+			const log: string[] = [];
+			branch.on("ancestryTrimmed", ({ trimmedRevisions }) => {
+				log.push(trimmedRevisions.join(", "));
+			});
+			branch.trim(tag2);
+			assert.deepEqual(log, [`${nullRevisionTag}, ${tag1}`]);
+		});
+
+		it("fires an event for all trimmed branches", () => {
+			const branch = create();
+			const tag = change(branch);
+			const forkA = branch.fork();
+			const tagA = change(forkA);
+			const forkB = branch.fork();
+			const tagB = change(forkB);
+
+			const log: string[] = [];
+			forkA.on("ancestryTrimmed", ({ trimmedRevisions }) => {
+				log.push(`A: ${trimmedRevisions.join(", ")}`);
+			});
+			forkB.on("ancestryTrimmed", ({ trimmedRevisions }) => {
+				log.push(`A: ${trimmedRevisions.join(", ")}`);
+			});
+			branch.trim(tag);
+			assert.deepEqual(log, [`${nullRevisionTag}, ${tag1}`]);
+		});
+	});
+
 	/** Creates a new root branch */
 	function create(
 		onChange?: (change: SharedTreeBranchChange<DefaultChangeset>) => void,
@@ -737,14 +792,10 @@ describe("Branches", () => {
 	/** Assert that the given branch is comprised of commits with exactly the given tags, in order from oldest to newest */
 	function assertHistory(branch: DefaultBranch, ...tags: RevisionTag[]): void {
 		const commits: GraphCommit<DefaultChangeset>[] = [];
-		const ancestor = findAncestor(
-			[branch.getHead(), commits],
-			(c) => c.revision === nullRevisionTag,
-		);
-		assert.equal(ancestor?.revision, nullRevisionTag);
-
+		const ancestor = findAncestor([branch.getHead(), commits]);
+		assert(ancestor !== undefined);
 		assert.deepEqual(
-			commits.map((c) => c.revision),
+			[ancestor, ...commits].map((c) => c.revision),
 			tags,
 		);
 	}
