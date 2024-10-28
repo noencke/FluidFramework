@@ -229,6 +229,7 @@ export class SharedTreeBranch<
 		this.unsubscribeBranchTrimmer = branchTrimmer?.on("ancestryTrimmed", (commit) => {
 			this.emit("ancestryTrimmed", commit);
 		});
+		trackBranch(this);
 	}
 
 	/**
@@ -238,6 +239,7 @@ export class SharedTreeBranch<
 		this.assertNotDisposed();
 		assert(!this.isTransacting(), 0x685 /* Cannot set head during a transaction */);
 		this.head = head;
+		trackBranch(this);
 	}
 
 	/**
@@ -269,6 +271,7 @@ export class SharedTreeBranch<
 
 		this.emit("beforeChange", changeEvent);
 		this.head = newHead;
+		trackBranch(this);
 		this.emit("afterChange", changeEvent);
 		return [taggedChange.change, newHead];
 	}
@@ -338,6 +341,7 @@ export class SharedTreeBranch<
 
 		this.emit("beforeChange", changeEvent);
 		this.head = newHead;
+		trackBranch(this);
 		this.emit("afterChange", changeEvent);
 		return [commits, newHead];
 	}
@@ -385,7 +389,9 @@ export class SharedTreeBranch<
 		} as const;
 
 		this.emit("beforeChange", changeEvent);
+		untrackBranch(this);
 		this.head = startCommit;
+		trackBranch(this);
 		this.emit("afterChange", changeEvent);
 		this.emit("transactionRolledBack", this.transactions.size === 0);
 		return [change, commits];
@@ -484,7 +490,17 @@ export class SharedTreeBranch<
 		} as const;
 
 		this.emit("beforeChange", changeEvent);
+
+		const oldBase = newCommits[0]?.parent;
+		assert(oldBase !== undefined, "Expected base commit to be defined");
+		const branchTree = branchTrees.get(oldBase);
+		assert(branchTree !== undefined, "Expected branch head to be tracked in branchTrees");
+		if (validations === 21676) {
+			debugger;
+		}
+		untrackBranch(this);
 		this.head = newSourceHead;
+		trackBranch(this);
 		this.emit("afterChange", changeEvent);
 		return rebaseResult;
 	}
@@ -531,6 +547,7 @@ export class SharedTreeBranch<
 
 		this.emit("beforeChange", changeEvent);
 		this.head = rebaseResult.newSourceHead;
+		trackBranch(this);
 		this.emit("afterChange", changeEvent);
 		return [change, sourceCommits];
 	}
@@ -585,6 +602,7 @@ export class SharedTreeBranch<
 		this.unsubscribeBranchTrimmer?.();
 
 		this.disposed = true;
+		untrackBranch(this);
 		this.emit("dispose");
 	}
 
@@ -614,3 +632,213 @@ export function onForkTransitive<T extends Listenable<{ fork: (t: T) => void }>>
 	);
 	return () => offs.forEach((off) => off());
 }
+
+// #region BranchTree
+
+// `SharedTreeBranch` is invariant over TChange, so neither `unknown` nor `never` can be used if we want branches with known types to be assignable to this type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UntypedSharedTreeBranch = SharedTreeBranch<ChangeFamilyEditor, any>;
+
+/**
+ * A tree structure that represents the branches of a SharedTree.
+ */
+type BranchTree = BranchTreeParent | BranchTreeLeaf;
+
+interface BranchTreeParent {
+	parent?: BranchTreeParent;
+	children: [BranchTree, BranchTree, ...BranchTree[]];
+}
+
+interface BranchTreeLeaf {
+	parent?: BranchTreeParent;
+	children: UntypedSharedTreeBranch;
+}
+
+function isLeaf(tree: BranchTree): tree is BranchTreeLeaf {
+	return tree.children instanceof SharedTreeBranch;
+}
+
+const branchTrees = new WeakMap<GraphCommit<unknown>, BranchTree>();
+function getBranchTree(commit: GraphCommit<unknown>): BranchTree {
+	const tree = branchTrees.get(commit);
+	assert(tree !== undefined, "Expected branch to be associated with commit");
+	return tree;
+}
+
+/**
+ * TODO
+ * @param commit - TODO
+ */
+export function getBranches(commit: GraphCommit<unknown>): Iterable<UntypedSharedTreeBranch> {
+	const tree = branchTrees.get(commit);
+	if (tree === undefined) {
+		return [];
+	}
+
+	return walkBranches(tree);
+}
+
+function* walkBranches(tree: BranchTree): Iterable<UntypedSharedTreeBranch> {
+	if (isLeaf(tree)) {
+		yield tree.children;
+	} else {
+		for (const child of tree.children) {
+			yield* walkBranches(child);
+		}
+	}
+}
+
+/**
+ * Ensures that a proper BranchTree structure has been created for all commits on the given branch
+ */
+export function trackBranch(branch: UntypedSharedTreeBranch): void {
+	const untrackedCommits: GraphCommit<unknown>[] = [];
+	let trackedCommit: GraphCommit<unknown> | undefined;
+	for (
+		let c: GraphCommit<unknown> | undefined = branch.getHead();
+		c !== undefined;
+		c = c.parent
+	) {
+		if (branchTrees.has(c)) {
+			trackedCommit = c;
+			break;
+		} else {
+			untrackedCommits.push(c);
+		}
+	}
+
+	let newBranchTree: BranchTreeLeaf = { children: branch };
+	if (trackedCommit !== undefined) {
+		const branchTree = getBranchTree(trackedCommit);
+		newBranchTree = addChild(branchTree, branch);
+	}
+
+	for (const c of untrackedCommits) {
+		branchTrees.set(c, newBranchTree);
+	}
+
+	validateBranch(branch);
+}
+
+function addChild(branchTree: BranchTree, branch: UntypedSharedTreeBranch): BranchTreeLeaf {
+	let newBranchTree: BranchTreeLeaf = { children: branch };
+	if (isLeaf(branchTree)) {
+		if (branchTree.children === branch) {
+			// The closest tracked ancestor already has the correct branch tree, so copy it to any new commits
+			newBranchTree = branchTree;
+		} else {
+			// Split the leaf node into a subtree with two child nodes: the existing leaf tree node and a new leaf node for this branch
+			const copy = { ...branchTree };
+			(branchTree as BranchTree).children = [copy, newBranchTree];
+			copy.parent = branchTree as BranchTree as BranchTreeParent;
+			newBranchTree.parent = branchTree as BranchTree as BranchTreeParent; // TODO: This casting is safe/correct, but make it cleaner
+			if (branchTree.parent !== undefined) {
+				addChild(branchTree.parent, newBranchTree);
+			}
+		}
+	} else {
+		const existing = branchTree.children.find(
+			(c): c is BranchTreeLeaf => c.children === branch,
+		);
+
+		if (existing !== undefined) {
+			// The closest tracked ancestor already has the correct branch tree as a child
+			newBranchTree = existing;
+		} else {
+			// The closest tracked ancestor does not have the correct branch tree as a child, so create and add it
+			branchTree.children.push(newBranchTree);
+			newBranchTree.parent = branchTree;
+		}
+	}
+
+	return newBranchTree;
+}
+
+export function untrackBranch(branch: UntypedSharedTreeBranch): void {
+	validateBranch(branch);
+	const branchTree = branchTrees.get(branch.getHead());
+	if (branchTree === undefined) {
+		return;
+	}
+
+	function removeLeaf(child: BranchTreeLeaf): void {
+		const parent = child.parent;
+		if (parent === undefined) {
+			return;
+		}
+
+		const index = parent.children.indexOf(child);
+		if (index !== -1) {
+			parent.children.splice(index, 1);
+			if (parent.children.length === 1) {
+				const otherChild = parent.children[0];
+				if (parent.parent !== undefined) {
+					const i = parent.parent.children.indexOf(parent);
+					assert(i !== -1, "Expected parent to be a child of its parent");
+					parent.parent.children[i] = otherChild;
+					otherChild.parent = parent.parent;
+				} else {
+					otherChild.parent = undefined;
+				}
+				// If the parent node is left with only one child, update all pointers to it to point to the child instead
+				for (
+					let c: GraphCommit<unknown> | undefined = branch.getHead();
+					c !== undefined;
+					c = c.parent
+				) {
+					if (branchTrees.get(c) === parent) {
+						branchTrees.set(c, otherChild);
+					} else {
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (isLeaf(branchTree)) {
+		assert(branchTree.children === branch, "Expected branch tree to match branch");
+		removeLeaf(branchTree);
+	} else {
+		const leaf = branchTree.children.find((c): c is BranchTreeLeaf => c.children === branch);
+		assert(leaf !== undefined, "Expected branch tree to contain branch");
+		removeLeaf(leaf);
+	}
+}
+
+let validations = 0;
+function validateBranch(branch: UntypedSharedTreeBranch): number {
+	for (
+		let c: GraphCommit<unknown> | undefined = branch.getHead();
+		c !== undefined;
+		c = c.parent
+	) {
+		const branchTree = branchTrees.get(c);
+		assert(branchTree !== undefined, "Branch tree missing for commit");
+		const branches = [...walkBranches(branchTree)];
+		if (!branches.includes(branch)) {
+			debugger;
+		}
+		assert(branches.includes(branch), "Branch tree missing branch for commit");
+	}
+	return validations++;
+}
+
+// function enableValidation(): void {
+// 	for (const key of Reflect.ownKeys(SharedTreeBranch.prototype)) {
+// 		const value = Reflect.get(SharedTreeBranch.prototype, key);
+// 		if (typeof key === "string" && key !== "constructor" && typeof value === "function") {
+// 			Reflect.defineProperty(
+// 				SharedTreeBranch.prototype,
+// 				key,
+// 				function (this: UntypedSharedTreeBranch, ...args: unknown[]) {
+// 					const result = value.apply(this, args);
+// 					validateBranch(this);
+// 					return result;
+// 				},
+// 			);
+// 		}
+// 	}
+// }
+
+// #endregion BranchTree
