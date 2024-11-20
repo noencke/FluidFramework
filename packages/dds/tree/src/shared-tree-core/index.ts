@@ -8,7 +8,6 @@ export {
 	SharedTreeBranch,
 	type SharedTreeBranchChange,
 	type SharedTreeBranchEvents,
-	getChangeReplaceType,
 } from "./branch.js";
 
 export {

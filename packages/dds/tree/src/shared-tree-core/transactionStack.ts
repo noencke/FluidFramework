@@ -6,6 +6,8 @@
 import type { RevisionTag } from "../core/index.js";
 import { fail } from "../util/index.js";
 
+// TODO: move this file (and transaction enricher) up to shared-tree?
+
 /**
  * A helper class that organizes the state needed for managing nesting transactions.
  */

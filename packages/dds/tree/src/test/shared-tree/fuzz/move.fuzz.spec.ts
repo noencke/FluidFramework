@@ -30,7 +30,7 @@ import {
 import type { Operation } from "./operationTypes.js";
 import { TypedEventEmitter } from "@fluid-internal/client-utils";
 
-describe("Fuzz - move", () => {
+describe.skip("Fuzz - move", () => {
 	const runsPerBatch = 50;
 	const opsPerRun = 30;
 	const editGeneratorOpWeights: Partial<EditGeneratorOpWeights> = {

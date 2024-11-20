@@ -56,6 +56,10 @@ export class BranchCommitEnricher<TChange> {
 	 * @param commit - A commit that is part of a transaction.
 	 */
 	public ingestTransactionCommit(commit: GraphCommit<TChange>): void {
+		assert(
+			this.transactionEnricher.inTransaction,
+			"Unexpected transaction commit outside transaction",
+		);
 		// We do not submit ops for changes that are part of a transaction.
 		// But we need to enrich the commits that will be sent if the transaction is committed.
 		this.transactionEnricher.addTransactionStep(commit);
@@ -69,12 +73,9 @@ export class BranchCommitEnricher<TChange> {
 	 * Each call to this method must be followed by a call to {@link BranchCommitEnricher.getPreparedCommit} or
 	 * {@link BranchCommitEnricher.purgePreparedCommits}. Failing to do so will result in a memory leak.
 	 */
-	public prepareCommit(
-		commit: GraphCommit<TChange>,
-		concludesOuterTransaction: boolean,
-	): void {
+	public prepareCommit(commit: GraphCommit<TChange>): void {
 		let enrichedChange: TChange;
-		if (concludesOuterTransaction) {
+		if (!this.transactionEnricher.inTransaction) {
 			assert(
 				this.transactionEnricher !== undefined,
 				0x97f /* Unexpected transaction commit without transaction steps */,

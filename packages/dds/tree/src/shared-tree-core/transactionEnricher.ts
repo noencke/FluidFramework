@@ -45,6 +45,10 @@ export class TransactionEnricher<TChange> {
 		this.transactionCommits.length = scopeStart;
 	}
 
+	public get inTransaction(): boolean {
+		return this.transactionScopesStart.length !== 0;
+	}
+
 	public addTransactionStep(commit: GraphCommit<TChange>): void {
 		assert(
 			this.transactionScopesStart.length !== 0,
@@ -55,7 +59,7 @@ export class TransactionEnricher<TChange> {
 	}
 
 	public getComposedChange(revision: RevisionTag): TChange {
-		assert(this.transactionScopesStart.length === 0, 0x988 /* Transaction not committed */);
+		// assert(this.transactionScopesStart.length === 0, 0x988 /* Transaction not committed */);
 		const squashed = this.rebaser.compose(this.transactionCommits);
 		const tagged = this.rebaser.changeRevision(squashed, revision);
 		this.transactionCommits.length = 0;

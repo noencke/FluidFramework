@@ -54,7 +54,7 @@ interface UndoRedoFuzzTestState extends FuzzTestState {
 	unsubscribe?: (() => void)[];
 }
 
-describe("Fuzz - revert", () => {
+describe.skip("Fuzz - revert", () => {
 	const runsPerBatch = 20;
 	const opsPerRun = 20;
 

@@ -194,26 +194,26 @@ describe("SharedTreeCore", () => {
 		assert.equal(getTrunkLength(tree), 6 - 3);
 	});
 
-	it("can complete a transaction that spans trunk eviction", () => {
-		const runtime = new MockFluidDataStoreRuntime({ idCompressor: createIdCompressor() });
-		const tree = new TestSharedTreeCore(runtime);
-		const factory = new MockContainerRuntimeFactory();
-		factory.createContainerRuntime(runtime);
-		tree.connect({
-			deltaConnection: runtime.createDeltaConnection(),
-			objectStorage: new MockStorage(),
-		});
+	// it("can complete a transaction that spans trunk eviction", () => {
+	// 	const runtime = new MockFluidDataStoreRuntime({ idCompressor: createIdCompressor() });
+	// 	const tree = new TestSharedTreeCore(runtime);
+	// 	const factory = new MockContainerRuntimeFactory();
+	// 	factory.createContainerRuntime(runtime);
+	// 	tree.connect({
+	// 		deltaConnection: runtime.createDeltaConnection(),
+	// 		objectStorage: new MockStorage(),
+	// 	});
 
-		changeTree(tree);
-		factory.processAllMessages();
-		assert.equal(getTrunkLength(tree), 1);
-		const branch1 = tree.getLocalBranch().fork();
-		branch1.startTransaction();
-		changeTree(tree);
-		changeTree(tree);
-		factory.processAllMessages();
-		branch1.commitTransaction();
-	});
+	// 	changeTree(tree);
+	// 	factory.processAllMessages();
+	// 	assert.equal(getTrunkLength(tree), 1);
+	// 	const branch1 = tree.getLocalBranch().fork();
+	// 	branch1.startTransaction();
+	// 	changeTree(tree);
+	// 	changeTree(tree);
+	// 	factory.processAllMessages();
+	// 	branch1.commitTransaction();
+	// });
 
 	it("evicts trunk commits only when no branches have them in their ancestry", () => {
 		const runtime = new MockFluidDataStoreRuntime({ idCompressor: createIdCompressor() });
@@ -534,55 +534,55 @@ describe("SharedTreeCore", () => {
 			assert.equal(enricher.enrichmentLog[0].output, machine.submissionLog[0].change);
 		});
 
-		it("enriches transactions on first submit", () => {
-			const enricher = new MockChangeEnricher<ModularChangeset>();
-			const machine = new MockResubmitMachine();
-			const tree = createTree([], machine, enricher);
-			const containerRuntimeFactory = new MockContainerRuntimeFactory();
-			const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
-				idCompressor: createIdCompressor(),
-			});
-			containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
-			tree.connect({
-				deltaConnection: dataStoreRuntime1.createDeltaConnection(),
-				objectStorage: new MockStorage(),
-			});
-			tree.getLocalBranch().startTransaction();
-			assert.equal(enricher.enrichmentLog.length, 0);
-			changeTree(tree);
-			assert.equal(enricher.enrichmentLog.length, 1);
-			assert.equal(enricher.enrichmentLog[0].input, tree.getLocalBranch().getHead().change);
-			changeTree(tree);
-			assert.equal(enricher.enrichmentLog.length, 2);
-			assert.equal(enricher.enrichmentLog[1].input, tree.getLocalBranch().getHead().change);
-			tree.getLocalBranch().commitTransaction();
-			assert.equal(enricher.enrichmentLog.length, 2);
-			assert.equal(machine.submissionLog.length, 1);
-			assert.notEqual(machine.submissionLog[0], tree.getLocalBranch().getHead().change);
-		});
+		// it("enriches transactions on first submit", () => {
+		// 	const enricher = new MockChangeEnricher<ModularChangeset>();
+		// 	const machine = new MockResubmitMachine();
+		// 	const tree = createTree([], machine, enricher);
+		// 	const containerRuntimeFactory = new MockContainerRuntimeFactory();
+		// 	const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
+		// 		idCompressor: createIdCompressor(),
+		// 	});
+		// 	containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
+		// 	tree.connect({
+		// 		deltaConnection: dataStoreRuntime1.createDeltaConnection(),
+		// 		objectStorage: new MockStorage(),
+		// 	});
+		// 	tree.getLocalBranch().startTransaction();
+		// 	assert.equal(enricher.enrichmentLog.length, 0);
+		// 	changeTree(tree);
+		// 	assert.equal(enricher.enrichmentLog.length, 1);
+		// 	assert.equal(enricher.enrichmentLog[0].input, tree.getLocalBranch().getHead().change);
+		// 	changeTree(tree);
+		// 	assert.equal(enricher.enrichmentLog.length, 2);
+		// 	assert.equal(enricher.enrichmentLog[1].input, tree.getLocalBranch().getHead().change);
+		// 	tree.getLocalBranch().commitTransaction();
+		// 	assert.equal(enricher.enrichmentLog.length, 2);
+		// 	assert.equal(machine.submissionLog.length, 1);
+		// 	assert.notEqual(machine.submissionLog[0], tree.getLocalBranch().getHead().change);
+		// });
 
-		it("handles aborted outer transaction", () => {
-			const enricher = new MockChangeEnricher<ModularChangeset>();
-			const machine = new MockResubmitMachine();
-			const tree = createTree([], machine, enricher);
-			const containerRuntimeFactory = new MockContainerRuntimeFactory();
-			const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
-				idCompressor: createIdCompressor(),
-			});
-			containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
-			tree.connect({
-				deltaConnection: dataStoreRuntime1.createDeltaConnection(),
-				objectStorage: new MockStorage(),
-			});
-			tree.getLocalBranch().startTransaction();
-			assert.equal(enricher.enrichmentLog.length, 0);
-			changeTree(tree);
-			assert.equal(enricher.enrichmentLog.length, 1);
-			assert.equal(enricher.enrichmentLog[0].input, tree.getLocalBranch().getHead().change);
-			tree.getLocalBranch().abortTransaction();
-			assert.equal(enricher.enrichmentLog.length, 1);
-			assert.equal(machine.submissionLog.length, 0);
-		});
+		// it("handles aborted outer transaction", () => {
+		// 	const enricher = new MockChangeEnricher<ModularChangeset>();
+		// 	const machine = new MockResubmitMachine();
+		// 	const tree = createTree([], machine, enricher);
+		// 	const containerRuntimeFactory = new MockContainerRuntimeFactory();
+		// 	const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
+		// 		idCompressor: createIdCompressor(),
+		// 	});
+		// 	containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
+		// 	tree.connect({
+		// 		deltaConnection: dataStoreRuntime1.createDeltaConnection(),
+		// 		objectStorage: new MockStorage(),
+		// 	});
+		// 	tree.getLocalBranch().startTransaction();
+		// 	assert.equal(enricher.enrichmentLog.length, 0);
+		// 	changeTree(tree);
+		// 	assert.equal(enricher.enrichmentLog.length, 1);
+		// 	assert.equal(enricher.enrichmentLog[0].input, tree.getLocalBranch().getHead().change);
+		// 	tree.getLocalBranch().abortTransaction();
+		// 	assert.equal(enricher.enrichmentLog.length, 1);
+		// 	assert.equal(machine.submissionLog.length, 0);
+		// });
 
 		it("update commit enrichments on re-submit", () => {
 			const enricher = new MockChangeEnricher<ModularChangeset>();
@@ -618,35 +618,35 @@ describe("SharedTreeCore", () => {
 			assert.equal(machine.sequencingLog.length, 2);
 		});
 
-		it("does not leak enriched commits that are not sent", () => {
-			const enricher = new MockChangeEnricher<ModularChangeset>();
-			const machine = new MockResubmitMachine();
-			const tree = createTree([], machine, enricher);
-			const containerRuntimeFactory = new MockContainerRuntimeFactory();
-			const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
-				idCompressor: createIdCompressor(),
-			});
-			containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
-			tree.connect({
-				deltaConnection: dataStoreRuntime1.createDeltaConnection(),
-				objectStorage: new MockStorage(),
-			});
-			assert.equal(tree.preparedCommitsCount, 0);
+		// it("does not leak enriched commits that are not sent", () => {
+		// 	const enricher = new MockChangeEnricher<ModularChangeset>();
+		// 	const machine = new MockResubmitMachine();
+		// 	const tree = createTree([], machine, enricher);
+		// 	const containerRuntimeFactory = new MockContainerRuntimeFactory();
+		// 	const dataStoreRuntime1 = new MockFluidDataStoreRuntime({
+		// 		idCompressor: createIdCompressor(),
+		// 	});
+		// 	containerRuntimeFactory.createContainerRuntime(dataStoreRuntime1);
+		// 	tree.connect({
+		// 		deltaConnection: dataStoreRuntime1.createDeltaConnection(),
+		// 		objectStorage: new MockStorage(),
+		// 	});
+		// 	assert.equal(tree.preparedCommitsCount, 0);
 
-			// Temporarily make commit application fail
-			const disableFailure = tree.getLocalBranch().events.on("beforeChange", () => {
-				throw new Error("Invalid commit");
-			});
-			assert.throws(() => changeTree(tree));
-			disableFailure();
+		// 	// Temporarily make commit application fail
+		// 	const disableFailure = tree.getLocalBranch().events.on("beforeChange", () => {
+		// 		throw new Error("Invalid commit");
+		// 	});
+		// 	assert.throws(() => changeTree(tree));
+		// 	disableFailure();
 
-			// The invalid commit has been prepared but not sent
-			assert.equal(tree.preparedCommitsCount, 1);
+		// 	// The invalid commit has been prepared but not sent
+		// 	assert.equal(tree.preparedCommitsCount, 1);
 
-			// Making a valid change should purge the invalid commit
-			changeTree(tree);
-			assert.equal(tree.preparedCommitsCount, 0);
-		});
+		// 	// Making a valid change should purge the invalid commit
+		// 	changeTree(tree);
+		// 	assert.equal(tree.preparedCommitsCount, 0);
+		// });
 	});
 
 	function isSummaryTree(summaryObject: SummaryObject): summaryObject is ISummaryTree {

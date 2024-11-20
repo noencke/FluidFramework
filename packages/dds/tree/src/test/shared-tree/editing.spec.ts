@@ -1713,7 +1713,6 @@ describe("Editing", () => {
 
 			childBranch.rebaseOnto(tree);
 			expectJsonTree(childBranch, expectedState);
-
 			tree.merge(childBranch);
 			expectJsonTree(tree, expectedState);
 		});

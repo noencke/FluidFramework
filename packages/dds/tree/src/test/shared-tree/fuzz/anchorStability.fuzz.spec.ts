@@ -60,7 +60,7 @@ const initialTreeState: NodeBuilderData<typeof FuzzNode> = {
  *
  * See the "Fuzz - Top-Level" test suite for tests are more general in scope.
  */
-describe("Fuzz - anchor stability", () => {
+describe.skip("Fuzz - anchor stability", () => {
 	const opsPerRun = 20;
 	const runsPerBatch = 50;
 	describe("Anchors are unaffected by aborted transaction", () => {

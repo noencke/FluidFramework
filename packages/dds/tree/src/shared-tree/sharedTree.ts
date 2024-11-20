@@ -16,6 +16,7 @@ import { UsageError } from "@fluidframework/telemetry-utils/internal";
 
 import { type ICodecOptions, noopValidator } from "../codec/index.js";
 import {
+	type GraphCommit,
 	type IEditableForest,
 	type JsonableTree,
 	RevisionTagCodec,
@@ -71,8 +72,9 @@ import {
 	type BranchableTree,
 	createTreeCheckout,
 } from "./treeCheckout.js";
-import { breakingClass, throwIfBroken } from "../util/index.js";
+import { breakingClass, throwIfBroken, type JsonCompatibleReadOnly } from "../util/index.js";
 import type { IIdCompressor } from "@fluidframework/id-compressor";
+import type { ClonableSchemaAndPolicy } from "../shared-tree-core/sharedTreeCore.js";
 
 /**
  * Copy of data from an {@link ISharedTree} at some point in time.
@@ -300,6 +302,7 @@ export class SharedTree
 			{
 				branch: localBranch,
 				changeFamily,
+				changeEnricher,
 				schema,
 				forest,
 				fieldBatchCodec,
@@ -310,6 +313,24 @@ export class SharedTree
 				breaker: this.breaker,
 			},
 		);
+
+		localBranch.events.on("beforeChange", (event) => {
+			// Ensure that any previously prepared commits that have not been sent are purged.
+			this.checkout.commitEnricher.purgePreparedCommits();
+			if (!this.isAttached()) {
+				// Edits submitted before the first attach do not need enrichment because they will not be applied by peers.
+			} else if (event.type === "append") {
+				if (this.checkout.isTransacting()) {
+					for (const newCommit of event.newCommits) {
+						this.checkout.commitEnricher.ingestTransactionCommit(newCommit);
+					}
+				} else {
+					for (const newCommit of event.newCommits) {
+						this.checkout.commitEnricher.prepareCommit(newCommit);
+					}
+				}
+			}
+		});
 	}
 
 	@throwIfBroken
@@ -348,6 +369,32 @@ export class SharedTree
 		await super.loadCore(services);
 		this.checkout.setTipRevisionForLoadedData(this.trunkHeadRevision);
 		this._events.emit("afterBatch");
+	}
+
+	protected override submitCommit(
+		commit: GraphCommit<SharedTreeChange>,
+		schemaAndPolicy: ClonableSchemaAndPolicy,
+		isResubmit?: boolean,
+	): void {
+		if (this.checkout.isTransacting()) {
+			// We do not submit ops for changes that are part of a transaction.
+			return;
+		}
+
+		if (isResubmit !== true && this.isAttached()) {
+			const prepared = this.checkout.commitEnricher.getPreparedCommit(commit);
+			return super.submitCommit(prepared, schemaAndPolicy, isResubmit);
+		}
+
+		return super.submitCommit(commit, schemaAndPolicy, isResubmit);
+	}
+
+	protected override applyStashedOp(content: JsonCompatibleReadOnly): void {
+		assert(
+			!this.checkout.isTransacting(),
+			0x674 /* Unexpected transaction is open while applying stashed ops */,
+		);
+		super.applyStashedOp(content);
 	}
 }
 
