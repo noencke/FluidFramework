@@ -8,3 +8,4 @@ export { addUsersTest } from "./addUsers.js";
 export { updateUserTest } from "./updateUser.js";
 export { smokeTest } from "./whiteSmoke.js";
 export { methodUseTest } from "./setUserDisplayNameWithMethods.js";
+export { emailSearchTest } from "./emailSearch.js";

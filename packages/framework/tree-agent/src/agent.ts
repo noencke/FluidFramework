@@ -261,6 +261,21 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 		},
 	);
 
+	private readonly scratchPadTool = tool(
+		// eslint-disable-next-line unicorn/consistent-function-scoping
+		({ note }: { note: string }) => {
+			this.options?.log?.(`### Scratch Pad Note\n\n${note}\n\n`);
+			return note;
+		},
+		{
+			name: "scratchPad",
+			description: "Use this tool to log notes and data during the editing process.",
+			schema: z.object({
+				note: z.string().describe("The note or data to log."),
+			}),
+		},
+	);
+
 	public async query(userPrompt: string): Promise<string | undefined> {
 		this.tree.branch.rebaseOnto(this.originalBranch);
 		this.setPrompting();
@@ -320,6 +335,10 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 						}
 						case this.editingTool.name: {
 							this.#messages.push(await this.editingTool.invoke(toolCall));
+							break;
+						}
+						case this.scratchPadTool.name: {
+							this.#messages.push(await this.scratchPadTool.invoke(toolCall));
 							break;
 						}
 						default: {

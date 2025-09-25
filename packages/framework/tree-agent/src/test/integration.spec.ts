@@ -11,6 +11,7 @@ import {
 	smokeTest,
 	methodUseTest,
 	updateUserTest,
+	emailSearchTest,
 } from "./scenarios/index.js";
 import { describeIntegrationTests, type LLMIntegrationTest } from "./utils.js";
 
@@ -20,4 +21,5 @@ describeIntegrationTests([
 	updateUserTest,
 	smokeTest,
 	methodUseTest,
+	emailSearchTest,
 ] as unknown as LLMIntegrationTest<UnsafeUnknownSchema>[]);
