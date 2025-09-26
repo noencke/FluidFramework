@@ -6,14 +6,11 @@
 import { UsageError } from "@fluidframework/telemetry-utils/internal";
 import type {
 	ImplicitFieldSchema,
-	RestrictiveStringRecord,
 	TreeFieldFromImplicitField,
-	TreeObjectNode,
+	TreeNodeSchema,
 } from "@fluidframework/tree";
 import { TreeNode, NodeKind, Tree } from "@fluidframework/tree";
-import { getSimpleSchema } from "@fluidframework/tree/alpha";
 import type {
-	ObjectNodeSchema,
 	ReadableField,
 	TreeBranch,
 	FactoryContentObject,
@@ -21,6 +18,7 @@ import type {
 	UnsafeUnknownSchema,
 	ReadSchema,
 } from "@fluidframework/tree/alpha";
+import { getSimpleSchema, ObjectNodeSchema } from "@fluidframework/tree/alpha";
 import { normalizeFieldSchema, type TreeMapNode } from "@fluidframework/tree/internal";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models"; // eslint-disable-line import/no-internal-modules
 import { HumanMessage, SystemMessage } from "@langchain/core/messages"; // eslint-disable-line import/no-internal-modules
@@ -42,7 +40,8 @@ import {
 	type TreeView,
 } from "./utils.js";
 
-const functionName = "editTree";
+const editFunctionName = "editTree";
+const scratchPadFunctionName = "getNotes";
 const paramsName = "params";
 
 /**
@@ -171,20 +170,44 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 		this.options?.log?.(
 			`#### Generated Code\n\n\`\`\`javascript\n${functionCode}\n\`\`\`\n\n`,
 		);
+
+		const code = this.processLlmCode(functionCode, editFunctionName);
+		await this.runGeneratedFunction(code);
+
+		const tree = this.queryTree;
+		this.options?.log?.(`#### New Tree State\n\n`);
+		this.options?.log?.(
+			`${
+				this.options.treeToString?.(tree.field) ??
+				`\`\`\`JSON\n${this.stringifyTree(tree.field)}\n\`\`\``
+			}\n\n`,
+		);
+		return `After running the function, the new state of the tree is:\n\n\`\`\`JSON\n${this.stringifyTree(
+			tree.field,
+		)}\n\`\`\``;
+	}
+
+	private async scratchPad(functionCode: string): Promise<string> {
+		this.options?.log?.(`### Scratchpad Tool Invoked\n\n`);
+		this.options?.log?.(
+			`#### Generated Code\n\n\`\`\`javascript\n${functionCode}\n\`\`\`\n\n`,
+		);
+
+		const code = this.processLlmCode(functionCode, scratchPadFunctionName);
+		const notes = await this.runGeneratedFunction(code);
+		this.options?.log?.(`#### Notes\n\n${notes}\n\n`);
+		return `The following notes have been recorded:\n\n${notes}`;
+	}
+
+	private async runGeneratedFunction(code: string): Promise<string | undefined> {
 		const tree = this.queryTree;
 		const create: Record<string, (input: FactoryContentObject) => TreeNode> = {};
-		visitObjectNodeSchema(tree.schema, (schema) => {
-			const name =
-				getFriendlySchemaName(schema.identifier) ??
-				fail("Expected friendly name for object node schema");
-
-			create[name] = (input: FactoryContentObject) => constructObjectNode(schema, input);
+		visitTreeNodeSchema(tree.schema, (schema) => {
+			const name = getFriendlySchemaName(schema.identifier);
+			if (name !== undefined) {
+				create[name] = (input: FactoryContentObject) => constructTreeNode(schema, input);
+			}
 		});
-		if (this.options?.validator?.(functionCode) === false) {
-			this.options?.log?.(`#### Code Validation Failed\n\n`);
-			return "Code validation failed";
-		}
-
 		const params = {
 			get root(): TreeNode | ReadableField<TRoot> {
 				return tree.field;
@@ -194,11 +217,17 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 			},
 			create,
 		};
-		const code = processLlmCode(functionCode);
-		// eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-		const fn = new Function(paramsName, code) as (p: typeof params) => Promise<void> | void;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+		const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+			...args: string[]
+			// biome-ignore lint/complexity/noBannedTypes: <explanation>
+			// eslint-disable-next-line @typescript-eslint/ban-types
+		) => Function;
+		const fn = new AsyncFunction(paramsName, code) as (
+			p: typeof params,
+		) => Promise<string | undefined> | string | undefined;
 		try {
-			await fn(params);
+			return await fn(params);
 		} catch (error: unknown) {
 			this.options?.log?.(`#### Error\n\n`);
 			const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
@@ -206,26 +235,49 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 			this.startQuerying();
 			return `Running the function produced an error. The state of the tree will be reset to its initial state. Please try again. Here is the error: ${errorMessage}`;
 		}
-		this.options?.log?.(`#### New Tree State\n\n`);
-		this.options?.log?.(
-			`${
-				this.options.treeToString?.(tree.field) ??
-				`\`\`\`JSON\n${this.stringifyTree(tree.field)}\n\`\`\``
-			}\n\n`,
+	}
+
+	private processLlmCode(code: string, functionName: string): string {
+		// TODO: use a library like Acorn to analyze the code more robustly
+		const regex = new RegExp(
+			`\\s*(?:export\\s+)?(?:async\\s+)?function\\s+${functionName}\\s*\\(`,
 		);
-		return `After running the function, the new state of the tree is:\n\n\`\`\`JSON\n${this.stringifyTree(tree.field)}\n\`\`\``;
+		if (!regex.test(code)) {
+			throw new Error(`Generated code does not contain a function named \`${functionName}\`.`);
+		}
+
+		if (this.options?.validator?.(code) === false) {
+			this.options?.log?.(`#### Code Validation Failed\n\n`);
+			return "Code validation failed";
+		}
+
+		return `${code}\n\nawait ${editFunctionName}(${paramsName});`;
 	}
 
 	// eslint-disable-next-line unicorn/consistent-function-scoping
 	private readonly editingTool = tool(async ({ functionCode }) => this.edit(functionCode), {
 		name: "GenerateTreeEditingCode",
-		description: `Invokes a JavaScript function \`${functionName}\` to edit a user's tree`,
+		description: `Invokes a JavaScript function \`${editFunctionName}\` to edit a user's tree`,
 		schema: z.object({
 			functionCode: z
 				.string()
-				.describe(`The body of the \`${functionName}\` JavaScript function`),
+				.describe(`The body of the \`${editFunctionName}\` JavaScript function`),
 		}),
 	});
+
+	private readonly scratchPadTool = tool(
+		// eslint-disable-next-line unicorn/consistent-function-scoping
+		async ({ functionCode }) => this.scratchPad(functionCode),
+		{
+			name: "scratchPad",
+			description: "Use this tool to log notes and data during the editing process.",
+			schema: z.object({
+				functionCode: z
+					.string()
+					.describe(`The body of the \`${scratchPadFunctionName}\` JavaScript function`),
+			}),
+		},
+	);
 
 	private readonly getTreeTool = tool(
 		// eslint-disable-next-line unicorn/consistent-function-scoping
@@ -248,21 +300,6 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 		},
 	);
 
-	private readonly scratchPadTool = tool(
-		// eslint-disable-next-line unicorn/consistent-function-scoping
-		({ note }: { note: string }) => {
-			this.options?.log?.(`### Scratch Pad Note\n\n${note}\n\n`);
-			return note;
-		},
-		{
-			name: "scratchPad",
-			description: "Use this tool to log notes and data during the editing process.",
-			schema: z.object({
-				note: z.string().describe("The note or data to log."),
-			}),
-		},
-	);
-
 	public async query(userPrompt: string): Promise<string | undefined> {
 		this.startQuerying();
 		this.options?.log?.(`## User Query\n\n${userPrompt}\n\n`);
@@ -280,7 +317,11 @@ export class FunctioningSemanticAgent<TRoot extends ImplicitFieldSchema>
 		}
 		this.#messages.push(
 			new HumanMessage(
-				`${this.#treeHasChangedSinceLastQuery ? "" : "The tree has not changed since your last message. "}${userPrompt}`,
+				`${
+					this.#treeHasChangedSinceLastQuery
+						? ""
+						: "The tree has not changed since your last message. "
+				}${userPrompt}`,
 			),
 		);
 
@@ -406,13 +447,15 @@ It will often not be possible to fully accomplish the goal using those helpers. 
 			exampleObjectName === undefined
 				? ""
 				: `When constructing new objects, you should wrap them in the appropriate builder function rather than simply making a javascript object.
-The builders are available on the "create" property on the first argument of the \`${functionName}\` function and are named according to the type that they create.
+The builders are available on the "create" property on the first argument of the \`${editFunctionName}\` function and are named according to the type that they create.
 For example:
 
 \`\`\`javascript
-function ${functionName}({ root, create }) {
+function ${editFunctionName}({ root, create }) {
 	// This creates a new ${exampleObjectName} object:
-	const ${uncapitalize(exampleObjectName)} = create.${exampleObjectName}({ /* ...properties... */ });
+	const ${uncapitalize(
+		exampleObjectName,
+	)} = create.${exampleObjectName}({ /* ...properties... */ });
 	// Don't do this:
 	// const ${uncapitalize(exampleObjectName)} = { /* ...properties... */ };
 }
@@ -457,29 +500,57 @@ ${typescriptSchemaTypes}
 \`\`\`
 
 If the user asks you a question about the tree, you should inspect the state of the tree and answer the question. When answering such a question, DO NOT answer with information that is not part of the document unless requested to do so.
-If the user asks you to edit the tree, you should use the "${this.editingTool.name}" tool to accomplish the user-specified goal, following the instructions for editing detailed below.
+If the user asks you to edit the tree, you should use the "${
+			this.editingTool.name
+		}" tool to accomplish the user-specified goal, following the instructions for editing detailed below.
 After editing the tree, review the latest state of the tree to see if it satisfies the user's request.
 If it does not, or if you receive an error, you may try again with a different approach.
 Once the tree is in the desired state, you should inform the user that the request has been completed.
 
 ### Editing
 
-If the user asks you to edit the document, you will use the "${this.editingTool.name}" tool to write a JavaScript function that mutates the data in-place to achieve the user's goal.
-The function must be named "${functionName}".
+If the user asks you to edit the document, you will use the "${
+			this.editingTool.name
+		}" tool to write a JavaScript function that mutates the data in-place to achieve the user's goal.
+The function must be named "${editFunctionName}".
 It may be synchronous or asynchronous.
-The ${functionName} function must have a first parameter which has a \`root\` property.
+The ${editFunctionName} function must have a first parameter which has a \`root\` property.
 This \`root\` property holds the current state of the tree as shown above.
 You may mutate any part of the tree as necessary, taking into account the caveats around arrays and maps detailed below.
-You may also set the \`root\` property to be an entirely new value as long as it is one of the types allowed at the root of the tree (\`${rootTypes.map((t) => getFriendlySchemaName(t)).join(" | ")}\`).
+You may also set the \`root\` property to be an entirely new value as long as it is one of the types allowed at the root of the tree (\`${rootTypes
+			.map((t) => getFriendlySchemaName(t))
+			.join(" | ")}\`).
 ${helperMethodExplanation}
 
-${hasArrays ? arrayEditing : ""}${hasMaps ? mapEditing : ""}### Additional Notes
+${hasArrays ? arrayEditing : ""}${hasMaps ? mapEditing : ""}### Scratchpad
 
-Before outputting the ${functionName} function, you should check that it is valid according to both the application tree's schema and any restrictions of the editing APIs described above.
+For some user requests, you may want to gather information, make notes to yourself, or perform reasoning before doing the final edit.
+You can use the "${
+			this.scratchPadTool.name
+		}" tool to write a function that logs such notes to yourself.
+For example, if user asks you to fetch data from the internet and then analyze it, you would first use the scratchpad tool to fetch that data and log it.
+Then, you would use analyze the logged data and finally use the editing tool to edit the tree based on your analysis.
+
+The function you provide to the ${
+			this.scratchPadTool.name
+		} tool must be named "${scratchPadFunctionName}".
+It may be synchronous or asynchronous and is passed the same first parameter as the ${
+			this.editingTool.name
+		} tool - an object with a \`root\` and \`create\` property.
+However, you should not mutate the tree when using the ${this.scratchPadTool.name} tool.
+Instead, to log notes to yourself, you should concatenate your notes into a string and return that string from the function.
+
+### Additional Notes
+
+Before outputting the ${editFunctionName} function, you should check that it is valid according to both the application TypeScript schema and the restrictions of the editing language (e.g. the array methods you are allowed to use).
+
+When possible, ensure that the edits preserve the identity of objects already in the tree (for example, prefer \`array.moveToIndex\` or \`array.moveRange\` over \`array.removeAt\` + \`array.insertAt\`).
 
 Once data has been removed from the tree (e.g. replaced via assignment, or removed from an array), that data cannot be re-inserted into the tree - instead, it must be deep cloned and recreated.
 
 ${builderExplanation}Finally, double check that the edits would accomplish the user's request (if it is possible).
+
+Don't ask the user for clarification - interpret the user's intent and accomplish it without intervention.
 
 ### Application data
 
@@ -750,57 +821,52 @@ function uncapitalize(str: string): string {
 	return str.charAt(0).toLowerCase() + str.slice(1);
 }
 
-function visitObjectNodeSchema(
+/**
+ * Visits non-primitive tree node schemas
+ */
+function visitTreeNodeSchema(
 	schema: ImplicitFieldSchema,
-	visitor: (schema: ObjectNodeSchema) => void,
+	visitor: (schema: TreeNodeSchema) => void,
 ): void {
 	const normalizedSchema = normalizeFieldSchema(schema);
 	for (const nodeSchema of normalizedSchema.allowedTypeSet) {
-		if (nodeSchema.kind === NodeKind.Object) {
-			visitor(nodeSchema as ObjectNodeSchema);
+		if (
+			[NodeKind.Object, NodeKind.Map, NodeKind.Array, NodeKind.Record].includes(
+				nodeSchema.kind,
+			)
+		) {
+			visitor(nodeSchema);
 		}
-		visitObjectNodeSchema([...nodeSchema.childTypes], visitor);
+		visitTreeNodeSchema([...nodeSchema.childTypes], visitor);
 	}
-}
-
-function processLlmCode(code: string): string {
-	// TODO: use a library like Acorn to analyze the code more robustly
-	const regex = new RegExp(`function\\s+${functionName}\\s*\\(`);
-	if (!regex.test(code)) {
-		throw new Error(`Generated code does not contain a function named \`${functionName}\``);
-	}
-
-	return `${code}\n\n${functionName}(${paramsName});`;
 }
 
 /**
- * Creates an unhydrated object node and populates it with `llmDefault` values if they exist.
+ * Creates an unhydrated tree node and populates it with `llmDefault` values if they exist.
  */
-function constructObjectNode(
-	schema: ObjectNodeSchema,
-	input: FactoryContentObject,
-): TreeObjectNode<RestrictiveStringRecord<ImplicitFieldSchema>> {
-	const inputWithDefaults: Record<string, InsertableContent | undefined> = {};
-	for (const [key, field] of schema.fields) {
-		if (input[key] === undefined) {
-			if (
-				typeof field.metadata.custom === "object" &&
-				field.metadata.custom !== null &&
-				llmDefault in field.metadata.custom
-			) {
-				const defaulter = field.metadata.custom[llmDefault];
-				if (typeof defaulter === "function") {
-					const defaultValue: unknown = defaulter();
-					if (defaultValue !== undefined) {
-						inputWithDefaults[key] = defaultValue;
+function constructTreeNode(schema: TreeNodeSchema, input: FactoryContentObject): TreeNode {
+	if (schema instanceof ObjectNodeSchema) {
+		const inputWithDefaults: Record<string, InsertableContent | undefined> = {};
+		for (const [key, field] of schema.fields) {
+			if (input[key] === undefined) {
+				if (
+					typeof field.metadata.custom === "object" &&
+					field.metadata.custom !== null &&
+					llmDefault in field.metadata.custom
+				) {
+					const defaulter = field.metadata.custom[llmDefault];
+					if (typeof defaulter === "function") {
+						const defaultValue: unknown = defaulter();
+						if (defaultValue !== undefined) {
+							inputWithDefaults[key] = defaultValue;
+						}
 					}
 				}
+			} else {
+				inputWithDefaults[key] = input[key];
 			}
-		} else {
-			inputWithDefaults[key] = input[key];
 		}
+		return constructNode(schema, inputWithDefaults);
 	}
-	return constructNode(schema, inputWithDefaults) as TreeObjectNode<
-		RestrictiveStringRecord<ImplicitFieldSchema>
-	>;
+	return constructNode(schema, input);
 }

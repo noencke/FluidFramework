@@ -31,22 +31,23 @@ export class Email extends sf.object("Email", {
 /**
  * An array of emails.
  */
-export class Emails extends sf.array("EmailSearch", Email) {
+export class Emails extends sf.array("Emails", Email) {
 	public static [exposeMethodsSymbol](methods: ExposedMethods): void {
 		methods.expose(
 			Emails,
-			"load",
+			"search",
 			buildFunc(
 				{
 					returns: z.promise(z.void()),
-					description: "Asynchronously load emails matching the search term into this array.",
+					description:
+						"Asynchronously find emails matching the search term and add them to this array.",
 				},
 				["searchTerm", z.string()],
 			),
 		);
 	}
 
-	public async load(searchTerm: string): Promise<void> {
+	public async search(searchTerm: string): Promise<void> {
 		const lowerTerm = searchTerm.toLowerCase();
 		const matches = emails
 			.filter(
@@ -54,7 +55,15 @@ export class Emails extends sf.array("EmailSearch", Email) {
 					email.subject.toLowerCase().includes(lowerTerm) ||
 					email.body.toLowerCase().includes(lowerTerm),
 			)
-			.map((email) => new Email(email));
+			.map(
+				(email) =>
+					new Email({
+						from: email.from,
+						to: [...email.to],
+						subject: email.subject,
+						body: email.body,
+					}),
+			);
 
 		this.insertAtEnd(...matches);
 	}

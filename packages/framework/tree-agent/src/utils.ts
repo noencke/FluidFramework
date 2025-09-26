@@ -171,7 +171,7 @@ export function getFriendlySchema(value: TreeNode | TreeLeafValue | undefined): 
 }
 
 /**
- * TODO
+ * TODO Make this robust. E.g. handle primitives within arrays and maps, and handle arrays of arrays, maps of maps, etc.
  * @remarks Returns undefined if the schema should not be included in the prompt (and therefore should not ever be seen by the LLM).
  */
 export function getFriendlySchemaName(schemaName: string): string | undefined {
@@ -368,6 +368,11 @@ export function getZodSchemaAsTypeScript(
 			}
 			case z.ZodFirstPartyTypeKind.ZodVoid: {
 				return append("void");
+			}
+			case z.ZodFirstPartyTypeKind.ZodPromise: {
+				append("Promise<");
+				appendType((type._def as z.ZodPromiseDef).type);
+				return append(">");
 			}
 			default: {
 				throw new UsageError(

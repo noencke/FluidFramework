@@ -64,7 +64,7 @@ export function createLlmClient(provider: LlmProvider): BaseChatModel {
 	switch (provider) {
 		case "openai": {
 			return new ChatOpenAI({
-				model: "gpt-5-2025-08-07",
+				model: "gpt-5-mini-2025-08-07",
 				apiKey:
 					process.env.OPENAI_API_KEY ??
 					failUsage("Missing OPENAI_API_KEY environment variable"),
@@ -194,7 +194,7 @@ function formatDate(date: Date): string {
 export function describeIntegrationTests(
 	tests: LLMIntegrationTest<UnsafeUnknownSchema>[],
 ): void {
-	describe.skip(`LLM integration tests`, () => {
+	describe(`LLM integration tests`, () => {
 		const results: TestResult[] = [];
 		let startTime: Date | undefined;
 		before(() => {
