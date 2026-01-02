@@ -14,12 +14,12 @@ import {
 	type ImplicitFieldSchema,
 	type InsertableField,
 } from "@fluidframework/tree/internal";
-import { z } from "zod";
 
 import type { TreeView } from "../api.js";
 import { buildFunc, exposeMethodsSymbol, type ExposedMethods } from "../methodBinding.js";
 import { getPrompt } from "../prompt.js";
 import { exposePropertiesSymbol, type ExposedProperties } from "../propertyBinding.js";
+import { tf } from "../renderTypeScript.js";
 import { Subtree } from "../subtree.js";
 
 const sf = new SchemaFactoryAlpha("test");
@@ -90,11 +90,7 @@ describe("Prompt generation", () => {
 				}
 
 				public static [exposeMethodsSymbol](methods: ExposedMethods): void {
-					methods.expose(
-						Obj,
-						"method",
-						buildFunc({ returns: z.boolean() }, ["s", z.string()]),
-					);
+					methods.expose(Obj, "method", buildFunc({ returns: tf.boolean }, ["s", tf.string]));
 				}
 			}
 
@@ -129,11 +125,11 @@ describe("Prompt generation", () => {
 
 				public static [exposePropertiesSymbol](properties: ExposedProperties): void {
 					properties.exposeProperty(ObjWithProperty, "name", {
-						schema: z.string(),
+						schema: tf.string,
 						readOnly: true,
 					});
 					properties.exposeProperty(ObjWithProperty, "testProperty", {
-						schema: z.string(),
+						schema: tf.string,
 						readOnly: true,
 					});
 				}
@@ -259,11 +255,11 @@ describe("Prompt snapshot", () => {
 
 			public static [exposePropertiesSymbol](properties: ExposedProperties): void {
 				properties.exposeProperty(TestMap, "testProperty", {
-					schema: z.string(),
+					schema: tf.string,
 					readOnly: true,
 				});
 				properties.exposeProperty(TestMap, "property", {
-					schema: z.string(),
+					schema: tf.string,
 					readOnly: true,
 					description: "A test property",
 				});
@@ -284,16 +280,16 @@ describe("Prompt snapshot", () => {
 				methods.expose(
 					NumberValue,
 					"print",
-					buildFunc({ returns: z.string() }, ["radix", z.number()]),
+					buildFunc({ returns: tf.string }, ["radix", tf.number]),
 				);
 			}
 			public static [exposePropertiesSymbol](properties: ExposedProperties): void {
 				properties.exposeProperty(NumberValue, "testProperty", {
-					schema: z.string(),
+					schema: tf.string,
 					readOnly: true,
 				});
 				properties.exposeProperty(NumberValue, "property", {
-					schema: z.string(),
+					schema: tf.string,
 					readOnly: true,
 				});
 			}

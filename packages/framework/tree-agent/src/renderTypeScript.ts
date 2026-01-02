@@ -9,7 +9,7 @@ import type { TreeNodeSchema, TreeNodeSchemaClass } from "@fluidframework/tree/a
 import { ObjectNodeSchema } from "@fluidframework/tree/alpha";
 
 /**
- * TODO
+ * Structural description of a type used by the tf helper APIs for prompt/type generation.
  * @alpha
  */
 export type TypeDef =
@@ -48,7 +48,7 @@ export function instanceOf<T extends TreeNodeSchemaClass>(schema: T): TypeDef {
 }
 
 /**
- * TODO
+ * Factory helpers for building {@link TypeDef} objects (tf analogue of the Zod builders).
  * @alpha
  */
 export const tf = {
@@ -91,7 +91,7 @@ export const tf = {
 } as const;
 
 /**
- * Converts tf TypeDef definitions into TypeScript declaration text.
+ * Converts tf {@link TypeDef} descriptions into TypeScript declaration text for prompts.
  */
 export function renderTypeDefTypeScript(
 	typeDef: TypeDef,

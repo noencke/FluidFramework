@@ -29,14 +29,21 @@ export { llmDefault } from "./utils.js";
 export {
 	buildFunc,
 	exposeMethodsSymbol,
+	FunctionWrapper,
 	type ArgsTuple,
 	type ExposedMethods,
 	type Arg,
 	type FunctionDef,
+	type FunctionFromDef,
 	type MethodKeys,
 	type BindableSchema,
 	type Ctor,
 	type Infer,
+	type FunctionMatchOrError,
+	type RestTuple,
+	type DecrementDepth,
+	type TypeFromTypeDef,
+	type ArgsTupleFromDefs,
 	type IExposedMethods,
 } from "./methodBinding.js";
 export type {
@@ -50,3 +57,4 @@ export type {
 	TypeMatchOrError,
 	IfEquals,
 } from "./propertyBinding.js";
+export { tf, instanceOf, type TypeDef } from "./renderTypeScript.js";

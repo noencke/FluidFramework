@@ -13,10 +13,10 @@ import {
 	type ImplicitFieldSchema,
 	type InsertableField,
 } from "@fluidframework/tree/internal";
-import { z } from "zod";
 
 import { buildFunc, exposeMethodsSymbol, type ExposedMethods } from "../methodBinding.js";
 import { exposePropertiesSymbol, type ExposedProperties } from "../propertyBinding.js";
+import { tf } from "../renderTypeScript.js";
 import { generateEditTypesForPrompt } from "../typeGeneration.js";
 
 const sf = new SchemaFactory("test");
@@ -30,7 +30,7 @@ class Todo extends sf.object("Todo", {
 	}
 
 	public static [exposeMethodsSymbol](methods: ExposedMethods): void {
-		methods.expose(Todo, "method", buildFunc({ returns: z.boolean() }, ["n", z.string()]));
+		methods.expose(Todo, "method", buildFunc({ returns: tf.boolean }, ["n", tf.string]));
 	}
 }
 
@@ -80,7 +80,7 @@ describe("Type generation", () => {
 					methods.expose(
 						ObjWithMethod,
 						"method",
-						buildFunc({ returns: z.boolean() }, ["n", z.string()]),
+						buildFunc({ returns: tf.boolean }, ["n", tf.string]),
 					);
 				}
 			}
@@ -105,7 +105,7 @@ describe("Type generation", () => {
 					methods.expose(
 						ArrayWithMethod,
 						"method",
-						buildFunc({ returns: z.boolean() }, ["n", z.string()]),
+						buildFunc({ returns: tf.boolean }, ["n", tf.string]),
 					);
 				}
 			}
@@ -131,7 +131,7 @@ type ArrayWithMethod = string[] & {
 					methods.expose(
 						MapWithMethod,
 						"method",
-						buildFunc({ returns: z.boolean() }, ["n", z.string()]),
+						buildFunc({ returns: tf.boolean }, ["n", tf.string]),
 					);
 				}
 			}
@@ -159,7 +159,7 @@ type MapWithMethod = Map<string, string> & {
 					methods.expose(
 						MapWithMethod,
 						"method",
-						buildFunc({ returns: methods.instanceOf(Obj) }, ["n", z.string()]),
+						buildFunc({ returns: methods.instanceOf(Obj) }, ["n", tf.string]),
 					);
 				}
 			}
@@ -184,9 +184,9 @@ type MapWithMethod = Map<string, string> & {
 					return this.testProperty;
 				}
 				public static [exposePropertiesSymbol](properties: ExposedProperties): void {
-					properties.exposeProperty(ObjWithProperty, "testProperty", { schema: z.string() });
+					properties.exposeProperty(ObjWithProperty, "testProperty", { schema: tf.string });
 					properties.exposeProperty(ObjWithProperty, "property", {
-						schema: z.string(),
+						schema: tf.string,
 						readOnly: true,
 					});
 				}
@@ -210,9 +210,9 @@ type MapWithMethod = Map<string, string> & {
 					return this.testProperty;
 				}
 				public static [exposePropertiesSymbol](properties: ExposedProperties): void {
-					properties.exposeProperty(ArrayWithProperty, "testProperty", { schema: z.string() });
+					properties.exposeProperty(ArrayWithProperty, "testProperty", { schema: tf.string });
 					properties.exposeProperty(ArrayWithProperty, "property", {
-						schema: z.string(),
+						schema: tf.string,
 						readOnly: true,
 					});
 				}
@@ -237,9 +237,9 @@ type ArrayWithProperty = string[] & {
 					return this.testProperty;
 				}
 				public static [exposePropertiesSymbol](properties: ExposedProperties): void {
-					properties.exposeProperty(MapWithProperty, "testProperty", { schema: z.string() });
+					properties.exposeProperty(MapWithProperty, "testProperty", { schema: tf.string });
 					properties.exposeProperty(MapWithProperty, "property", {
-						schema: z.string(),
+						schema: tf.string,
 						readOnly: true,
 					});
 				}

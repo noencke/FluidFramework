@@ -5,10 +5,19 @@
 ```ts
 
 // @alpha
-export type Arg<T extends z.ZodTypeAny = z.ZodTypeAny> = readonly [name: string, type: T];
+export type Arg<T extends TypeDef = TypeDef> = readonly [name: string, type: T];
 
 // @alpha
-export type ArgsTuple<T extends readonly Arg[]> = T extends readonly [infer Single extends Arg] ? [Single[1]] : T extends readonly [infer Head extends Arg, ...infer Tail extends readonly Arg[]] ? [Head[1], ...ArgsTuple<Tail>] : never;
+export type ArgsTuple<T extends readonly Arg[]> = T extends readonly [
+...infer Entries extends Arg[]
+] ? {
+    [K in keyof Entries]: Entries[K] extends Arg<infer U> ? TypeFromTypeDef<U> : never;
+} : [];
+
+// @alpha
+export type ArgsTupleFromDefs<T extends readonly TypeDef[]> = T extends readonly [
+infer Single extends TypeDef
+] ? [TypeFromTypeDef<Single>] : T extends readonly [infer Head extends TypeDef, ...infer Tail extends readonly TypeDef[]] ? [TypeFromTypeDef<Head>, ...ArgsTupleFromDefs<Tail>] : [];
 
 // @alpha
 export type AsynchronousEditor<TSchema extends ImplicitFieldSchema> = (tree: ViewOrTree<TSchema>, code: string) => Promise<void>;
@@ -17,11 +26,11 @@ export type AsynchronousEditor<TSchema extends ImplicitFieldSchema> = (tree: Vie
 export type BindableSchema = TreeNodeSchema<string, NodeKind.Object> | TreeNodeSchema<string, NodeKind.Record> | TreeNodeSchema<string, NodeKind.Array> | TreeNodeSchema<string, NodeKind.Map>;
 
 // @alpha
-export function buildFunc<const Return extends z.ZodTypeAny, const Args extends readonly Arg[], const Rest extends z.ZodTypeAny | null = null>(def: {
+export function buildFunc<const Return extends TypeDef, const Args extends readonly Arg[], const Rest extends TypeDef | undefined = undefined>(def: {
     description?: string;
     returns: Return;
     rest?: Rest;
-}, ...args: Args): FunctionDef<Args, Return, Rest>;
+}, ...args: [...Args]): FunctionDef<Args, Return, Rest>;
 
 // @alpha
 export interface Context<TSchema extends ImplicitFieldSchema> {
@@ -41,6 +50,9 @@ export function createContext<TSchema extends ImplicitFieldSchema>(tree: ViewOrT
 export type Ctor<T = any> = new (...args: any[]) => T;
 
 // @alpha
+export type DecrementDepth<N extends number> = N extends 0 ? 0 : N extends 1 ? 0 : N extends 2 ? 1 : N extends 3 ? 2 : N extends 4 ? 3 : N extends 5 ? 4 : 5;
+
+// @alpha
 export interface EditResult {
     message: string;
     type: "success" | "disabledError" | "editingError" | "tooManyEditsError" | "expiredError";
@@ -54,19 +66,18 @@ export type ExposableKeys<T> = {
 // @alpha
 export interface ExposedMethods {
     // (undocumented)
-    expose<const K extends string & keyof MethodKeys<InstanceType<S>>, S extends BindableSchema & Ctor<Record<K, Infer<Z>>> & IExposedMethods, Z extends FunctionDef<any, any, any>>(schema: S, methodName: K, zodFunction: Z): void;
-    instanceOf<T extends TreeNodeSchemaClass>(schema: T): z.ZodType<InstanceType<T>, z.ZodTypeDef, InstanceType<T>>;
+    expose<S extends BindableSchema & Ctor & IExposedMethods, const K extends string & keyof MethodKeys<InstanceType<S>>, const Args extends readonly Arg[], const Return extends TypeDef, const Rest extends TypeDef | undefined = undefined, Check extends FunctionMatchOrError<InstanceType<S>[K], FunctionFromDef<FunctionDef<Args, Return, Rest>>> = FunctionMatchOrError<InstanceType<S>[K], FunctionFromDef<FunctionDef<Args, Return, Rest>>>>(schema: S, methodName: K, tfFunction: FunctionDef<Args, Return, Rest> & Check): void;
+    instanceOf<T extends TreeNodeSchemaClass_2>(schema: T): TypeDef;
 }
 
 // @alpha
 export interface ExposedProperties {
     // (undocumented)
-    exposeProperty<S extends BindableSchema & Ctor, K extends string & ExposableKeys<InstanceType<S>>, TZ extends ZodTypeAny>(schema: S, name: K, def: {
-        schema: TZ;
+    exposeProperty<S extends BindableSchema & Ctor, K extends string & ExposableKeys<InstanceType<S>>, TSchema extends TypeDef>(schema: S, name: K, def: {
+        schema: TSchema;
         description?: string;
-    } & ReadOnlyRequirement<InstanceType<S>, K> & TypeMatchOrError<InstanceType<S>[K], infer<TZ>>): void;
-    // (undocumented)
-    instanceOf<T extends TreeNodeSchemaClass>(schema: T): ZodType<InstanceType<T>, ZodTypeDef, InstanceType<T>>;
+    } & ReadOnlyRequirement<InstanceType<S>, K> & TypeMatchOrError<InstanceType<S>[K], TypeFromTypeDef<TSchema>>): void;
+    instanceOf<T extends TreeNodeSchemaClass_2>(schema: T): TypeDef;
 }
 
 // @alpha
@@ -76,15 +87,54 @@ export const exposeMethodsSymbol: unique symbol;
 export const exposePropertiesSymbol: unique symbol;
 
 // @alpha
-export interface FunctionDef<Args extends readonly Arg[], Return extends z.ZodTypeAny, Rest extends z.ZodTypeAny | null = null> {
-    // (undocumented)
+export interface FunctionDef<Args extends readonly Arg[], Return extends TypeDef, Rest extends TypeDef | undefined = undefined> {
     args: Args;
-    // (undocumented)
     description?: string;
-    // (undocumented)
     rest?: Rest;
-    // (undocumented)
     returns: Return;
+}
+
+// @alpha
+export type FunctionFromDef<Def extends FunctionDef<readonly Arg[], TypeDef, TypeDef | undefined>> = Def extends FunctionDef<infer Args, infer Return, infer Rest> ? (...args: [...ArgsTuple<Args>, ...RestTuple<Rest>]) => TypeFromTypeDef<Return> : never;
+
+// @alpha
+export type FunctionMatchOrError<Expected, Received> = Expected extends (...expected: infer ExpectedArgs) => infer ExpectedReturn ? Received extends (...received: infer ReceivedArgs) => infer ReceivedReturn ? [ExpectedArgs] extends [ReceivedArgs] ? [ReceivedArgs] extends [ExpectedArgs] ? [ExpectedReturn] extends [ReceivedReturn] ? [ReceivedReturn] extends [ExpectedReturn] ? unknown : {
+    __error__: "Helper method return type does not match the implementation";
+    expected: ExpectedReturn;
+    received: ReceivedReturn;
+} : {
+    __error__: "Helper method return type does not match the implementation";
+    expected: ExpectedReturn;
+    received: ReceivedReturn;
+} : {
+    __error__: "Helper method parameters do not match the implementation";
+    expected: ExpectedArgs;
+    received: ReceivedArgs;
+} : {
+    __error__: "Helper method parameters do not match the implementation";
+    expected: ExpectedArgs;
+    received: ReceivedArgs;
+} : {
+    __error__: "Helper method is not callable";
+    received: Received;
+} : {
+    __error__: "Implementation is not callable";
+    expected: Expected;
+};
+
+// @alpha
+export class FunctionWrapper implements FunctionDef<readonly Arg[], TypeDef, TypeDef | undefined> {
+    constructor(name: string, description: string | undefined, args: readonly Arg[], rest: TypeDef | undefined, returns: TypeDef);
+    // (undocumented)
+    readonly args: readonly Arg[];
+    // (undocumented)
+    readonly description: string | undefined;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly rest: TypeDef | undefined;
+    // (undocumented)
+    readonly returns: TypeDef;
 }
 
 // @alpha
@@ -103,7 +153,10 @@ export interface IExposedProperties {
 export type IfEquals<X, Y, A = true, B = false> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? A : B;
 
 // @alpha
-export type Infer<T> = T extends FunctionDef<infer Args, infer Return, infer Rest> ? z.infer<z.ZodFunction<z.ZodTuple<ArgsTuple<Args>, Rest>, Return>> : never;
+export type Infer<T> = T extends FunctionDef<infer Args, infer Return, infer Rest> ? FunctionFromDef<FunctionDef<Args, Return, Rest>> : never;
+
+// @alpha
+export function instanceOf<T extends TreeNodeSchemaClass>(schema: T): TypeDef;
 
 // @alpha
 export const llmDefault: unique symbol;
@@ -120,7 +173,7 @@ export type MethodKeys<T> = {
 
 // @alpha
 export class PropertyDef {
-    constructor(name: string, description: string | undefined, schema: ZodTypeAny, readOnly: boolean);
+    constructor(name: string, description: string | undefined, schema: TypeDef, readOnly: boolean);
     // (undocumented)
     readonly description: string | undefined;
     // (undocumented)
@@ -128,7 +181,7 @@ export class PropertyDef {
     // (undocumented)
     readonly readOnly: boolean;
     // (undocumented)
-    readonly schema: ZodTypeAny;
+    readonly schema: TypeDef;
 }
 
 // @alpha
@@ -148,6 +201,9 @@ export type ReadOnlyRequirement<TObj, K extends keyof TObj> = {
         readOnly?: false;
     };
 }[K];
+
+// @alpha
+export type RestTuple<TRest> = TRest extends TypeDef ? TypeFromTypeDef<TRest>[] : [];
 
 // @alpha
 export interface SemanticAgentOptions<TSchema extends ImplicitFieldSchema> {
@@ -181,11 +237,154 @@ export class SharedTreeSemanticAgent<TSchema extends ImplicitFieldSchema> {
 export type SynchronousEditor<TSchema extends ImplicitFieldSchema> = (tree: ViewOrTree<TSchema>, code: string) => void;
 
 // @alpha
+export const tf: {
+    readonly string: {
+        readonly kind: "primitive";
+        readonly type: "string";
+    };
+    readonly number: {
+        readonly kind: "primitive";
+        readonly type: "number";
+    };
+    readonly boolean: {
+        readonly kind: "primitive";
+        readonly type: "boolean";
+    };
+    readonly null: {
+        readonly kind: "primitive";
+        readonly type: "null";
+    };
+    readonly undefined: {
+        readonly kind: "primitive";
+        readonly type: "undefined";
+    };
+    readonly void: {
+        readonly kind: "primitive";
+        readonly type: "void";
+    };
+    readonly any: {
+        readonly kind: "primitive";
+        readonly type: "any";
+    };
+    readonly array: <T extends TypeDef>(item: T) => {
+        readonly kind: "array";
+        readonly item: T;
+    };
+    readonly object: <T_1 extends Record<string, TypeDef>>(props: T_1) => {
+        readonly kind: "object";
+        readonly props: T_1;
+    };
+    readonly promise: <T_2 extends TypeDef>(inner: T_2) => {
+        readonly kind: "promise";
+        readonly inner: T_2;
+    };
+    readonly union: <T_3 extends TypeDef[]>(...types: T_3) => {
+        readonly kind: "union";
+        readonly types: T_3;
+    };
+    readonly optional: <T_4 extends TypeDef>(inner: T_4) => {
+        readonly kind: "optional";
+        readonly inner: T_4;
+    };
+    readonly literal: <T_5 extends string | number | boolean>(value: T_5) => {
+        readonly kind: "literal";
+        readonly value: T_5;
+    };
+    readonly function: <A extends TypeDef[], R extends TypeDef>(args: A, returns: R) => {
+        readonly kind: "function";
+        readonly args: A;
+        readonly returns: R;
+    };
+    readonly date: {
+        readonly kind: "date";
+    };
+    readonly lazy: <T_6 extends TypeDef>(factory: () => T_6) => {
+        readonly kind: "lazy";
+        readonly factory: () => T_6;
+    };
+    readonly instanceOf: typeof instanceOf;
+};
+
+// @alpha
 export type TreeView<TRoot extends ImplicitFieldSchema> = Pick<TreeViewAlpha<TRoot>, "root" | "fork" | "merge" | "rebaseOnto" | "schema" | "events"> & TreeBranchAlpha;
 
 // @alpha
+export type TypeDef = {
+    kind: "primitive";
+    type: "string" | "number" | "boolean" | "null" | "undefined" | "void" | "any";
+} | {
+    kind: "array";
+    item: TypeDef;
+} | {
+    kind: "object";
+    props: Record<string, TypeDef>;
+} | {
+    kind: "promise";
+    inner: TypeDef;
+} | {
+    kind: "union";
+    types: TypeDef[];
+} | {
+    kind: "optional";
+    inner: TypeDef;
+} | {
+    kind: "literal";
+    value: string | number | boolean;
+} | {
+    kind: "function";
+    args: TypeDef[];
+    returns: TypeDef;
+} | {
+    kind: "date";
+} | {
+    kind: "lazy";
+    factory: () => TypeDef;
+} | {
+    kind: "instanceof";
+    schema: TreeNodeSchemaClass;
+};
+
+// @alpha
+export type TypeFromTypeDef<T extends TypeDef, Depth extends number = 5> = Depth extends 0 ? unknown : T extends {
+    kind: "primitive";
+    type: infer P;
+} ? P extends "string" ? string : P extends "number" ? number : P extends "boolean" ? boolean : P extends "null" ? null : P extends "undefined" ? undefined : P extends "void" ? void : any : T extends {
+    kind: "array";
+    item: infer I extends TypeDef;
+} ? TypeFromTypeDef<I, DecrementDepth<Depth>>[] : T extends {
+    kind: "object";
+    props: infer Props extends Record<string, TypeDef>;
+} ? {
+    [K in keyof Props]: TypeFromTypeDef<Props[K], DecrementDepth<Depth>>;
+} : T extends {
+    kind: "promise";
+    inner: infer Inner extends TypeDef;
+} ? Promise<TypeFromTypeDef<Inner, DecrementDepth<Depth>>> : T extends {
+    kind: "union";
+    types: infer Types extends TypeDef[];
+} ? TypeFromTypeDef<Types[number], DecrementDepth<Depth>> : T extends {
+    kind: "optional";
+    inner: infer OptionalInner extends TypeDef;
+} ? TypeFromTypeDef<OptionalInner, DecrementDepth<Depth>> | undefined : T extends {
+    kind: "literal";
+    value: infer Value extends string | number | boolean;
+} ? Value : T extends {
+    kind: "function";
+    args: infer A extends TypeDef[];
+    returns: infer R extends TypeDef;
+} ? (...args: ArgsTupleFromDefs<A>) => TypeFromTypeDef<R, DecrementDepth<Depth>> : T extends {
+    kind: "date";
+} ? Date : T extends {
+    kind: "lazy";
+    factory: () => infer U extends TypeDef;
+} ? TypeFromTypeDef<U, DecrementDepth<Depth>> : T extends {
+    kind: "instanceof";
+    schema: infer S extends TreeNodeSchemaClass_2;
+} ? InstanceType<S> : unknown;
+
+// @alpha
 export type TypeMatchOrError<Expected, Received> = [Received] extends [Expected] ? unknown : {
-    __error__: "Zod schema value type does not match the property's declared type";
+    __error__: "TypeDef value type does not match the property's declared type";
     expected: Expected;
     received: Received;
 };

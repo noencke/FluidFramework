@@ -13,12 +13,15 @@ import type {
 	SimpleObjectNodeSchema,
 	SimpleRecordNodeSchema,
 } from "@fluidframework/tree/internal";
-import { z } from "zod";
 
 import type { BindableSchema, FunctionWrapper } from "./methodBinding.js";
 import { getExposedMethods } from "./methodBinding.js";
 import { getExposedProperties, type PropertyDef } from "./propertyBinding.js";
-import { instanceOfs, renderZodTypeScript } from "./renderZodTypeScript.js";
+import {
+	instanceOfs as typeDefInstanceOfs,
+	renderTypeDefTypeScript,
+	type TypeDef,
+} from "./renderTypeScript.js";
 import { getFriendlyName, isNamedSchema, llmDefault, unqualifySchema } from "./utils.js";
 
 interface BoundMembers {
@@ -434,7 +437,12 @@ function renderPropertyLines(properties: Record<string, PropertyDef>): string[] 
 			}
 		}
 		const modifier = property.readOnly ? "readonly " : "";
-		lines.push(`${modifier}${name}: ${renderZodType(property.schema)};`);
+		const renderedType = renderTypeDefTypeScript(
+			property.schema,
+			getFriendlyName,
+			typeDefInstanceOfs,
+		);
+		lines.push(`${modifier}${name}: ${renderedType};`);
 	}
 	return lines;
 }
@@ -442,14 +450,28 @@ function renderPropertyLines(properties: Record<string, PropertyDef>): string[] 
 function formatMethod(name: string, method: FunctionWrapper): string {
 	const args: string[] = [];
 	for (const [argName, argType] of method.args) {
-		const { innerType, optional } = unwrapOptional(argType);
-		const renderedType = renderZodType(innerType);
+		const { innerType, optional } = unwrapOptionalTypeDef(argType);
+		const renderedType = renderTypeDefTypeScript(
+			innerType,
+			getFriendlyName,
+			typeDefInstanceOfs,
+		);
 		args.push(`${argName}${optional ? "?" : ""}: ${renderedType}`);
 	}
-	if (method.rest !== null) {
-		args.push(`...rest: ${renderZodType(method.rest)}[]`);
+	if (method.rest !== undefined) {
+		const renderedRest = renderTypeDefTypeScript(
+			method.rest,
+			getFriendlyName,
+			typeDefInstanceOfs,
+		);
+		args.push(`...rest: ${renderedRest}[]`);
 	}
-	return `${name}(${args.join(", ")}): ${renderZodType(method.returns)};`;
+	const returnType = renderTypeDefTypeScript(
+		method.returns,
+		getFriendlyName,
+		typeDefInstanceOfs,
+	);
+	return `${name}(${args.join(", ")}): ${returnType};`;
 }
 
 function renderLeaf(leafKind: ValueSchema): string {
@@ -479,13 +501,9 @@ function formatExpression(
 	return expression.precedence < minPrecedence ? `(${expression.text})` : expression.text;
 }
 
-/**
- * Detects optional zod wrappers so argument lists can keep TypeScript optional markers in sync.
- */
-function unwrapOptional(type: z.ZodTypeAny): { innerType: z.ZodTypeAny; optional: boolean } {
-	if (type instanceof z.ZodOptional) {
-		const inner = type.unwrap() as z.ZodTypeAny;
-		return { innerType: inner, optional: true };
+function unwrapOptionalTypeDef(type: TypeDef): { innerType: TypeDef; optional: boolean } {
+	if (type.kind === "optional") {
+		return { innerType: type.inner, optional: true };
 	}
 	return { innerType: type, optional: false };
 }
@@ -499,25 +517,21 @@ function ensureNoMemberConflicts(
 	methods: Record<string, FunctionWrapper>,
 	properties: Record<string, PropertyDef>,
 ): void {
-	for (const name of Object.keys(methods)) {
+	const methodNames = new Set(Object.keys(methods));
+	const propertyNames = new Set(Object.keys(properties));
+
+	for (const name of methodNames) {
 		if (fieldNames.has(name)) {
 			throw new UsageError(
 				`Method ${name} conflicts with field of the same name in schema ${definition}`,
 			);
 		}
 	}
-	for (const name of Object.keys(properties)) {
+	for (const name of propertyNames) {
 		if (fieldNames.has(name)) {
 			throw new UsageError(
 				`Property ${name} conflicts with field of the same name in schema ${definition}`,
 			);
 		}
 	}
-}
-
-/**
- * Converts schema metadata into TypeScript declarations suitable for prompt inclusion.
- */
-function renderZodType(type: z.ZodTypeAny): string {
-	return renderZodTypeScript(type, getFriendlyName, instanceOfs);
 }
