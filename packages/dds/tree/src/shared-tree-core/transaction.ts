@@ -19,9 +19,10 @@ import {
 	type GraphCommit,
 	type RevisionTag,
 } from "../core/index.js";
-import { getLast, getOrCreate } from "../util/index.js";
+import { getLast, getOrCreate, hasSome } from "../util/index.js";
 
 import type { SharedTreeBranch, SharedTreeBranchEvents } from "./branch.js";
+import { DefaultRevisionReplacer } from "../feature-libraries/index.js";
 
 /**
  * Describes the result of a transaction.
@@ -148,7 +149,7 @@ export class TransactionStack implements Transactor, IDisposable {
 
 	/**
 	 * Construct a new {@link TransactionStack}.
-	 * @param onPush - A {@link OnPush | function} that will be called when a transaction begins.
+	 * @param onPush - A {@link OnPush | function} that will be called when a (non-nested) transaction begins.
 	 */
 	public constructor(onPush?: OnPush) {
 		this.#onPush = onPush;
@@ -344,12 +345,15 @@ export class SquashingTransactionStack<
 							break;
 						}
 						case TransactionResult.Commit: {
-							if (transactionSteps.length > 0) {
-								assert(
-									transactionRevision !== undefined,
-									0xccf /* Expected transaction revision in the presence of transaction steps */,
-								);
+							if (hasSome(transactionSteps)) {
+								transactionRevision = getLast(transactionSteps).revision;
 								for (const commit of transactionSteps) {
+									if (commit.revision !== transactionRevision) {
+										rebaser.changeRevision(
+											commit.change,
+											new DefaultRevisionReplacer(transactionRevision),
+										);
+									}
 									assert(
 										commit.revision === transactionRevision,
 										0xcaf /* Unexpected commit in transaction */,

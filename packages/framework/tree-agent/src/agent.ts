@@ -14,6 +14,7 @@ import type {
 	FactoryContentObject,
 	InsertableContent,
 	ReadSchema,
+	JsonCompatibleReadOnly,
 } from "@fluidframework/tree/alpha";
 import { ObjectNodeSchema, Tree, TreeAlpha } from "@fluidframework/tree/alpha";
 
@@ -115,12 +116,18 @@ export class SharedTreeSemanticAgent<TSchema extends ImplicitFieldSchema> {
 		}
 
 		// Fork a branch that will live for the lifetime of this query (which can be multiple LLM calls if the there are errors or the LLM decides to take multiple steps to accomplish a task).
-		// The branch will be merged back into the outer branch if and only if the query succeeds.
+		// This isolates the LLM's working branch from the outer branch in case the outer branch is being mutated.
 		const queryTree = this.outerTree.fork();
+		// Additionally, freeze a second fork at this starting point that we will use to apply changes into later.
+		// This allows us to combine all the changes into a single transaction, since forking/merging is currently unsupported in the middle of a transaction.
+		const editTree = this.outerTree.fork();
+		// Keep track of all successful edits made during this query.
+		// If the query succeeds, these edits will be merged into the outer tree in a single transaction.
+		const changes: JsonCompatibleReadOnly[] = [];
 		const maxEditCount = this.options?.maximumSequentialEdits ?? defaultMaxSequentialEdits;
 		let active = true;
 		let editCount = 0;
-		let rollbackEdits = false;
+		let applyEdits = true;
 		const { editToolName } = this.client;
 		const edit = async (editCode: string): Promise<EditResult> => {
 			if (editToolName === undefined) {
@@ -137,22 +144,27 @@ export class SharedTreeSemanticAgent<TSchema extends ImplicitFieldSchema> {
 			}
 
 			if (++editCount > maxEditCount) {
-				rollbackEdits = true;
+				applyEdits = false;
 				return {
 					type: "tooManyEditsError",
 					message: `The maximum number of edits (${maxEditCount}) for this query has been exceeded.`,
 				};
 			}
 
-			const editResult = await applyTreeFunction(
+			const applyResult = await applyTreeFunction(
 				queryTree,
 				editCode,
 				this.editor,
 				this.options?.logger,
 			);
 
-			rollbackEdits = editResult.type !== "success";
-			return editResult;
+			if (applyResult.type === "success") {
+				changes.push(...applyResult.edits);
+				applyEdits = true;
+			} else {
+				applyEdits = false;
+			}
+			return { message: applyResult.message, type: applyResult.type };
 		};
 
 		const responseMessage = await this.client.query({
@@ -160,11 +172,17 @@ export class SharedTreeSemanticAgent<TSchema extends ImplicitFieldSchema> {
 			edit,
 		});
 		active = false;
-
-		if (!rollbackEdits) {
-			this.outerTree.branch.merge(queryTree.branch);
+		queryTree.branch.dispose();
+		if (applyEdits) {
+			editTree.branch.runTransaction(() => {
+				for (const c of changes) {
+					editTree.branch.applyChange(c);
+				}
+			});
+			this.outerTree.branch.merge(editTree.branch, false);
 			this.outerTreeIsDirty = false;
 		}
+		editTree.branch.dispose();
 		this.options?.logger?.log(`## Response\n\n`);
 		this.options?.logger?.log(`${responseMessage}\n\n`);
 		return responseMessage;
@@ -206,6 +224,10 @@ function constructTreeNode(schema: TreeNodeSchema, content: FactoryContentObject
 	return TreeAlpha.tagContentSchema(schema, toInsert as never);
 }
 
+type ApplyResult =
+	| (EditResult & { type: "success"; edits: JsonCompatibleReadOnly[] })
+	| (EditResult & { type: Exclude<EditResult["type"], "success"> });
+
 /**
  * Applies the given function (as a string of JavaScript code or an actual function) to the given tree.
  */
@@ -214,12 +236,20 @@ async function applyTreeFunction<TSchema extends ImplicitFieldSchema>(
 	editCode: string,
 	editor: SynchronousEditor<TSchema> | AsynchronousEditor<TSchema>,
 	logger: Logger | undefined,
-): Promise<EditResult> {
+): Promise<ApplyResult> {
 	logger?.log(`### Editing Tool Invoked\n\n`);
 	logger?.log(`#### Generated Code\n\n\`\`\`javascript\n${editCode}\n\`\`\`\n\n`);
 
 	// Fork a branch to edit. If the edit fails or produces an error, we discard this branch, otherwise we merge it.
 	const editTree = tree.fork();
+	const edits: JsonCompatibleReadOnly[] = [];
+	editTree.branch.events.on("changed", (args) => {
+		const change = args.getChange?.();
+		if (change !== undefined) {
+			edits.push(change);
+		}
+	});
+
 	try {
 		await editor(editTree.viewOrTree, editCode);
 	} catch (error: unknown) {
@@ -238,6 +268,7 @@ async function applyTreeFunction<TSchema extends ImplicitFieldSchema>(
 	return {
 		type: "success",
 		message: `After running the code, the new state of the tree is:\n\n\`\`\`JSON\n${stringifyTree(tree.field)}\n\`\`\``,
+		edits,
 	};
 }
 
