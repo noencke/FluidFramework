@@ -340,6 +340,22 @@ export interface TreeBranchAlpha extends TreeBranch, TreeContextAlpha {
 	 * Update the tests and docs to match when that is done.
 	 */
 	applyChange(change: JsonCompatibleReadOnly): void;
+
+	/**
+	 * Swap the underlying branches of this view and the given view.
+	 * @param branch - the view/branch to swap with.
+	 * @remarks After this call, this view is on the given view's branch (and vice versa).
+	 * Both views fire change events for their respective deltas.
+	 *
+	 * This enables a workflow where a user forks a branch, swaps their UI-bound view onto the fork,
+	 * makes edits visible in the UI, then merges the fork back and swaps again to return to the original branch.
+	 *
+	 * Existing revertibles on both views are left in place but are only guaranteed to work correctly
+	 * when the view is on the same branch where the revertible was created.
+	 *
+	 * Must not be called during a transaction on either view.
+	 */
+	swap(branch: TreeBranch): void;
 }
 
 /**

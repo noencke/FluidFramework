@@ -592,6 +592,10 @@ export class SchematizingSimpleTreeView<
 		getCheckout(context).rebase(this.checkout);
 	}
 
+	public swap(view: TreeBranch): void {
+		this.checkout.swapBranches(getCheckout(view));
+	}
+
 	// #endregion Branching
 }
 

@@ -467,7 +467,7 @@ export class TreeCheckout implements ITreeCheckoutFork {
 	public constructor(
 		branch: SharedTreeBranch<SharedTreeEditBuilder, SharedTreeChange>,
 		/** True if and only if this checkout is for a branch which is persisted and shared with other clients. */
-		public readonly isSharedBranch: boolean,
+		public isSharedBranch: boolean,
 		private readonly changeFamily: ChangeFamily<SharedTreeEditBuilder, SharedTreeChange>,
 		public readonly storedSchema: TreeStoredSchemaRepository,
 		public readonly forest: IEditableForest,
@@ -1042,6 +1042,32 @@ export class TreeCheckout implements ITreeCheckoutFork {
 		// TODO: Rework eventing
 		this.applyChange(diff);
 		this.#events.emit("afterBatch");
+	}
+
+	public swapBranches(other: TreeCheckout): void {
+		this.checkNotDisposed("A disposed view cannot be swapped.");
+		other.checkNotDisposed("Cannot swap with a disposed view.");
+		this.editLock.checkUnlocked("Swapping");
+		other.editLock.checkUnlocked("Swapping");
+
+		if (this.transaction.size > 0) {
+			throw new UsageError("A view cannot be swapped while it has a pending transaction.");
+		}
+		if (other.transaction.size > 0) {
+			throw new UsageError("Cannot swap with a view that has a pending transaction.");
+		}
+
+		// Save the branch that 'this' currently tracks before switchBranch replaces it.
+		const thisBranch = this.#transaction.activeBranch;
+
+		// Swap the shared branch flag so that branching operations (merge, rebase, dispose) remain correct.
+		const thisWasShared = this.isSharedBranch;
+		this.isSharedBranch = other.isSharedBranch;
+		other.isSharedBranch = thisWasShared;
+
+		// Switch both checkouts to the other's branch.
+		this.switchBranch(other.#transaction.activeBranch);
+		other.switchBranch(thisBranch);
 	}
 
 	public rebase(checkout: TreeCheckout): void {
