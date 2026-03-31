@@ -2,18 +2,5 @@
   "permissions": {
     "defaultMode": "auto"
   },
-  "skipAutoPermissionPrompt": true,
-  "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true,
-    "network": {
-      "allowedDomains": [
-        "github.com",
-        "*.github.com",
-        "registry.npmjs.org",
-        "*.npmjs.org",
-        "*.nodejs.org"
-      ]
-    }
-  }
+  "skipAutoPermissionPrompt": true
 }
