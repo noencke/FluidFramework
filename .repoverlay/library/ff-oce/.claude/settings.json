@@ -1,6 +1,6 @@
 {
-  "permissions": {
-    "defaultMode": "auto"
-  },
-  "skipAutoPermissionPrompt": true
+	"permissions": {
+		"defaultMode": "auto"
+	},
+	"skipAutoPermissionPrompt": true
 }
