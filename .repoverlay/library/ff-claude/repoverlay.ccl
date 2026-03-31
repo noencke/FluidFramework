@@ -1,0 +1,7 @@
+/= Overlay configuration file.
+/= This file describes an overlay and how it should be applied.
+
+overlay =
+  /= name: Display name for this overlay.
+  /= Used in status output and when listing overlays.
+  name = ff-claude
