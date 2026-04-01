@@ -185,9 +185,9 @@ export interface FieldPropsAlpha<TCustomMetadata = unknown>
 	readonly persistedMetadata?: JsonCompatibleReadOnlyObject | undefined;
 
 	/**
-	 * If set, marks this field as a {@link SchemaFactoryAlpha.stagedOptional | staged optional} field.
+	 * If set, marks this field as a {@link SchemaStaticsAlpha.stagedOptional | staged optional} field.
 	 * @remarks
-	 * Do not set directly; use {@link SchemaFactoryAlpha.stagedOptional} instead.
+	 * Do not set directly; use {@link SchemaStaticsAlpha.stagedOptional} instead.
 	 * @system
 	 */
 	readonly stagedOptionalUpgrade?: SchemaUpgrade;
