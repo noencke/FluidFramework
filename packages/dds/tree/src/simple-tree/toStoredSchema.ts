@@ -36,6 +36,7 @@ import {
 import {
 	ExpectStored,
 	NodeKind,
+	SchemaUpgrade,
 	Unchanged,
 	type SimpleSchemaTransformationOptions,
 	type StoredFromViewSchemaGenerationOptions,
@@ -425,6 +426,10 @@ function filterFieldAllowedTypes(
 	f: SimpleFieldSchema,
 	options: SimpleSchemaTransformationOptions,
 ): SimpleFieldSchema {
+	const isOptionalStaged =
+		preservesViewData(options) && f.isOptionalStaged instanceof SchemaUpgrade
+			? f.isOptionalStaged
+			: undefined;
 	return {
 		kind: getStoredFieldKind(f, options),
 		persistedMetadata: f.persistedMetadata,
@@ -435,6 +440,7 @@ function filterFieldAllowedTypes(
 				}
 			: {},
 		simpleAllowedTypes: filterAllowedTypes(f.simpleAllowedTypes, options),
+		...(isOptionalStaged !== undefined ? { isOptionalStaged } : {}),
 	};
 }
 

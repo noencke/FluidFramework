@@ -292,7 +292,8 @@ export interface SimpleFieldSchema<Type extends SchemaType = SchemaType> {
 	 * allowing the view schema to be compatible with stored schema where the field is required (pre-upgrade) or optional (post-upgrade).
 	 * New documents and schema upgrades will keep the field as required in the stored schema.
 	 *
-	 * Undefined if derived from a stored schema, or if not a staged optional field.
+	 * `false` if this is a view schema field that is not staged optional.
+	 * Absent (`undefined`) if derived from a stored schema (where staged optional has no meaning).
 	 *
 	 * @privateRemarks
 	 * Analogous to {@link SimpleAllowedTypeAttributes.isStaged} for allowed types.
