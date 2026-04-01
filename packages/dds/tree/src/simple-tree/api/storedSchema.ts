@@ -53,7 +53,7 @@ export function extractPersistedSchema(
 	minVersionForCollab: MinimumVersionForCollab,
 	includeStaged: (upgrade: SchemaUpgrade) => boolean,
 ): JsonCompatible {
-	const stored = toStoredSchema(schema, { includeStaged });
+	const stored = toStoredSchema(schema, { includeStaged, includeStagedOptional: () => false });
 	const codec = schemaCodecBuilder.build({
 		minVersionForCollab,
 		jsonValidator: FormatValidatorNoOp,

@@ -28,6 +28,7 @@ import type {
 	TreeLeafValue,
 	InsertableTreeNodeFromImplicitAllowedTypes,
 	AllowedTypesFull,
+	SchemaUpgrade,
 } from "./core/index.js";
 import { AnnotatedAllowedTypesInternal, normalizeAllowedTypes } from "./core/index.js";
 import type {
@@ -182,6 +183,14 @@ export interface FieldPropsAlpha<TCustomMetadata = unknown>
 	 * Sets {@link SimpleFieldSchema.persistedMetadata}.
 	 */
 	readonly persistedMetadata?: JsonCompatibleReadOnlyObject | undefined;
+
+	/**
+	 * If set, marks this field as a {@link SchemaFactoryAlpha.stagedOptional | staged optional} field.
+	 * @remarks
+	 * Do not set directly; use {@link SchemaFactoryAlpha.stagedOptional} instead.
+	 * @system
+	 */
+	readonly stagedOptionalUpgrade?: SchemaUpgrade;
 }
 
 /**
@@ -410,6 +419,10 @@ export class FieldSchemaAlpha<
 
 	public get persistedMetadata(): JsonCompatibleReadOnlyObject | undefined {
 		return this.propsAlpha?.persistedMetadata;
+	}
+
+	public get isOptionalStaged(): false | SchemaUpgrade {
+		return this.propsAlpha?.stagedOptionalUpgrade ?? false;
 	}
 
 	static {

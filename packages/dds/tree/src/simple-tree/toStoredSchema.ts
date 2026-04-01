@@ -76,6 +76,7 @@ const viewToStoredCache = new WeakMap<
 export const restrictiveStoredSchemaGenerationOptions: StoredFromViewSchemaGenerationOptions =
 	{
 		includeStaged: () => false,
+		includeStagedOptional: () => false,
 	};
 
 /**
@@ -92,6 +93,7 @@ export const restrictiveStoredSchemaGenerationOptions: StoredFromViewSchemaGener
  */
 export const permissiveStoredSchemaGenerationOptions: StoredFromViewSchemaGenerationOptions = {
 	includeStaged: () => true,
+	includeStagedOptional: () => true,
 };
 
 /**
@@ -424,7 +426,7 @@ function filterFieldAllowedTypes(
 	options: SimpleSchemaTransformationOptions,
 ): SimpleFieldSchema {
 	return {
-		kind: f.kind,
+		kind: getStoredFieldKind(f, options),
 		persistedMetadata: f.persistedMetadata,
 		metadata: preservesViewData(options)
 			? {
@@ -434,6 +436,23 @@ function filterFieldAllowedTypes(
 			: {},
 		simpleAllowedTypes: filterAllowedTypes(f.simpleAllowedTypes, options),
 	};
+}
+
+/**
+ * Returns the field kind to use in the stored schema for the given view field schema.
+ * @remarks
+ * For {@link SchemaFactoryAlpha.stagedOptional | staged optional} fields, the stored field kind is Required
+ * when the staged optional is not being included (i.e., restrictive options).
+ */
+function getStoredFieldKind(
+	f: SimpleFieldSchema,
+	options: SimpleSchemaTransformationOptions,
+): FieldKind {
+	if (!isStoredFromView(options)) return f.kind;
+	const { isOptionalStaged } = f;
+	if (isOptionalStaged === undefined || isOptionalStaged === false) return f.kind;
+	// isOptionalStaged is a SchemaUpgrade — use includeStagedOptional to decide the stored kind.
+	return options.includeStagedOptional(isOptionalStaged) ? f.kind : FieldKind.Required;
 }
 
 /**
