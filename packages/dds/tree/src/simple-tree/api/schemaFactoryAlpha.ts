@@ -164,10 +164,21 @@ export interface SchemaStaticsAlpha {
 	 * @typeParam TCustomMetadata - Custom metadata properties to associate with the field.
 	 * See {@link FieldSchemaMetadata.custom}.
 	 */
-	readonly stagedOptional: <const T extends ImplicitAllowedTypes, const TCustomMetadata = unknown>(
+	readonly stagedOptional: <
+		const T extends ImplicitAllowedTypes,
+		const TCustomMetadata = unknown,
+	>(
 		t: T,
-		props?: Omit<FieldPropsAlpha<TCustomMetadata>, "defaultProvider" | "stagedOptionalUpgrade">,
-	) => FieldSchemaAlpha<FieldKind.Optional, T, TCustomMetadata, FieldPropsAlpha<TCustomMetadata>>;
+		props?: Omit<
+			FieldPropsAlpha<TCustomMetadata>,
+			"defaultProvider" | "stagedOptionalUpgrade"
+		>,
+	) => FieldSchemaAlpha<
+		FieldKind.Optional,
+		T,
+		TCustomMetadata,
+		FieldPropsAlpha<TCustomMetadata>
+	>;
 
 	/**
 	 * {@link SchemaStaticsAlpha.withDefault} except tweaked to work better for recursive types.

@@ -344,7 +344,9 @@ describe("staged optional upgrade", () => {
 		const stored = new TestSchemaRepository(defaultSchemaPolicy, toUpgradeSchema(schemaA));
 
 		// View A: can view, can upgrade (no-op), is equivalent
-		let view = new SchemaCompatibilityTester(new TreeViewConfigurationAlpha({ schema: schemaA }));
+		let view = new SchemaCompatibilityTester(
+			new TreeViewConfigurationAlpha({ schema: schemaA }),
+		);
 		assert.deepEqual(view.checkCompatibility(stored), {
 			canView: true,
 			canUpgrade: true,

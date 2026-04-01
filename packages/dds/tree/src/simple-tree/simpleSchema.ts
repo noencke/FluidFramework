@@ -298,7 +298,9 @@ export interface SimpleFieldSchema<Type extends SchemaType = SchemaType> {
 	 * Analogous to {@link SimpleAllowedTypeAttributes.isStaged} for allowed types.
 	 * Optional (`?`) so that existing code constructing `SimpleFieldSchema` object literals does not need to be updated.
 	 */
-	readonly isOptionalStaged?: Type extends SchemaType.Stored ? undefined : false | SchemaUpgrade;
+	readonly isOptionalStaged?: Type extends SchemaType.Stored
+		? undefined
+		: false | SchemaUpgrade;
 }
 
 /**
