@@ -60,7 +60,7 @@ that instruction to the <required> block.
 # Template Variables
 
 These variables are automatically substituted when skills are installed:
-- `{{skills_dir}}` → actual path to skills directory (e.g., `/home/user/.claude/skills`)
+- `.claude/skills` → actual path to skills directory (e.g., `/home/user/.claude/skills`)
 - `{{nori_install_dir}}` → actual install directory (e.g., `/home/user`)
 
 Use these in your skill content to create portable paths. This is especially
