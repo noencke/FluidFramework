@@ -440,7 +440,7 @@ function filterFieldAllowedTypes(
 				}
 			: {},
 		simpleAllowedTypes: filterAllowedTypes(f.simpleAllowedTypes, options),
-		...(isOptionalStaged !== undefined ? { isOptionalStaged } : {}),
+		...(isOptionalStaged === undefined ? {} : { isOptionalStaged }),
 	};
 }
 
