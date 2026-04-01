@@ -49,7 +49,8 @@
 		"welcome-notice": "sudo cp .devcontainer/ai-agent/first-run-notice.txt /usr/local/etc/vscode-dev-containers/first-run-notice.txt"
 	},
 	"postStartCommand": {
-		"bwrap-setup": "sudo mount --make-rshared /"
+		"bwrap-setup": "sudo mount --make-rshared /",
+		"sandbox-tmpdir": "mkdir -p /tmp/claude"
 	},
 	"remoteUser": "node",
 	"features": {

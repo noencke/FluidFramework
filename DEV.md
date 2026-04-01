@@ -206,6 +206,10 @@ sudo mount --make-rshared /
 
 This recursively marks all mount points as shared, allowing bwrap's bind mounts to work.
 
+### Sandbox TMPDIR ([`postStartCommand`](.devcontainer/ai-agent/devcontainer.json))
+
+Claude Code sets `TMPDIR=/tmp/claude` inside the sandbox, but doesn't create the directory itself. The sandbox allowlist permits writes to `/tmp/claude`, and the weaker sandbox bind-mounts the real `/tmp` into the namespace, so the directory just needs to exist on the host. Without it, any tool that resolves `TMPDIR` on startup (pnpm, node, etc.) crashes with `ENOENT`. The `postStartCommand` runs `mkdir -p /tmp/claude` to pre-create it. This is a workaround for a Claude Code bug ([anthropics/claude-code#21654](https://github.com/anthropics/claude-code/issues/21654)).
+
 ### `enableWeakerNestedSandbox` ([Claude settings](.repoverlay/library/ff-claude/.claude/settings.json))
 
 Even with the above flags, Docker still blocks mounting a fresh `/proc` filesystem inside a user namespace — a kernel-level restriction that `CAP_SYS_ADMIN` and AppArmor changes cannot override. Claude's full-strength sandbox requires this `/proc` mount. The `enableWeakerNestedSandbox` setting tells Claude to use a weaker sandbox variant that skips the `/proc` mount while still providing filesystem isolation via bwrap.
