@@ -77,8 +77,6 @@ cd <package-dir> && pnpm exec fluid-build . --task compile
 
 # Step 5: ESLint auto-fix (Full and Thorough only)
 
-**Run ESLint BEFORE regenerating API reports.** ESLint can modify source files (e.g. simplifying expressions, reordering imports), and those changes must be baked in before API Extractor processes the code. If you run API reports first and ESLint second, you may need to regenerate API reports again.
-
 For each built changed package, check its `package.json` for the available lint fix script and run it:
 ```bash
 # Check which script exists — packages use different names
@@ -181,3 +179,5 @@ Run `git status` and report to the user:
 5. **Skipped checks** — anything skipped due to mode choice or unbuilt packages.
 
 End with a clear statement: "Your branch is ready to push" or "These issues remain: ..."
+
+**If further code changes are made after this check** (e.g. fixing a review comment, addressing a lint error manually, or any other edit), re-run ESLint and — if the API surface changed — regenerate API reports before pushing. A CI readiness check only reflects the state of the code at the time it was run.
