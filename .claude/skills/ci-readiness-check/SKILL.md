@@ -10,8 +10,8 @@ description: Quick pre-push check that catches common CI failures before you pus
 2. Run the CI readiness script.
 3. Review script output and report results to the user.
 4. If the user chose Full or Thorough mode and there are unbuilt packages, build them.
-5. For each built changed package where the user-facing API surface changed, regenerate API reports and check for downstream cascade.
-6. For each built changed package, run ESLint auto-fix.
+5. For each built changed package, run ESLint auto-fix.
+6. For each built changed package where the user-facing API surface changed, regenerate API reports and check for downstream cascade. Also run `build:docs` to catch TSDoc errors.
 7. For each built changed package where the user-facing API surface changed, regenerate type tests.
 8. If the user chose Thorough mode, run tests in changed packages.
 9. Report final status: what was fixed, what needs staging, any remaining issues.
@@ -75,9 +75,22 @@ If the script reports unbuilt packages, build them:
 cd <package-dir> && pnpm exec fluid-build . --task compile
 ```
 
+# Step 5: ESLint auto-fix (Full and Thorough only)
+
+**Run ESLint BEFORE regenerating API reports.** ESLint can modify source files (e.g. simplifying expressions, reordering imports), and those changes must be baked in before API Extractor processes the code. If you run API reports first and ESLint second, you may need to regenerate API reports again.
+
+For each built changed package, check its `package.json` for the available lint fix script and run it:
+```bash
+# Check which script exists — packages use different names
+cd <package-dir> && node -p "Object.keys(require('./package.json').scripts || {}).filter(s => /eslint.fix|lint.fix/.test(s))"
+cd <package-dir> && pnpm run <script-name>
+```
+
+Common script names: `eslint:fix`, `lint:fix`. Only run what exists. If the script fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
+
 # Determining if the public API surface changed
 
-Steps 5 and 7 require judging whether a package's public API surface changed. Use these criteria:
+Steps 6 and 7 require judging whether a package's public API surface changed. Use these criteria:
 
 **API likely changed — proceed with the check:**
 - `src/index.ts` or any entry point file (`src/alpha.ts`, `src/beta.ts`, `src/legacy.ts`, `src/internal.ts`) was modified
@@ -92,7 +105,9 @@ Steps 5 and 7 require judging whether a package's public API surface changed. Us
 
 **Why be conservative:** There is a known bug in API Extractor where it non-deterministically reorders some generated types in the `@fluidframework/tree` package specifically. The output differs between local and CI, producing bogus diffs that look like real changes but aren't. Running API Extractor unnecessarily on that package can introduce these confusing phantom diffs. Only run it when you're confident the public API actually changed.
 
-# Step 5: API reports and cross-package cascade (Full and Thorough only)
+# Step 6: API reports and cross-package cascade (Full and Thorough only)
+
+## 6a. Regenerate API reports
 
 For each built changed package that has a `build:api-reports` script, and where the public API surface likely changed (see criteria above):
 
@@ -102,7 +117,26 @@ cd <package-dir> && pnpm run build:api-reports
 
 If API Extractor fails with `ae-missing-release-tag` (most commonly in `@fluidframework/tree`), the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
 
-**Cross-package cascade:** After regenerating API reports for a package, check if any "aggregator" packages re-export from it. If so, their API reports are now stale too.
+**Handling phantom key-reorder diffs in `@fluidframework/tree`:** After running `build:api-reports` on `@fluidframework/tree`, check `git diff` on the updated report. If the **only** changes are key reorderings within type signatures (e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"`, with no added or removed API members), this is a spurious local-machine artifact — do NOT commit it. Restore the file:
+```bash
+git checkout -- packages/dds/tree/api-report/tree.alpha.api.md
+```
+
+## 6b. Run `build:docs` to catch TSDoc errors
+
+**Critical:** `build:api-reports` uses an API Extractor config that suppresses `ae-unresolved-link` errors. CI catches these via a separate `build:docs` step that uses the package-root `api-extractor.json` without that suppression. You must run `build:docs` locally to catch these before pushing.
+
+For each built changed package that has a `build:docs` script, run it regardless of whether the API surface changed (TSDoc link errors can come from any modified source file):
+
+```bash
+cd <package-dir> && pnpm run build:docs 2>&1 | grep -E "Error|Warning"
+```
+
+If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag references an ambiguous name (most commonly a member that exists as both a static and instance declaration). Fix by linking to an unambiguous target — for example, link to the interface that declares the member (which has exactly one declaration) rather than the class that exposes it as both static and instance. The TSDoc `:instance`/`:static` system selectors are **not** supported by this version of API Extractor.
+
+## 6c. Cross-package cascade
+
+After regenerating API reports for a package, check if any "aggregator" packages re-export from it. If so, their API reports are now stale too.
 
 Read the source index files of these aggregator packages and look for imports from the changed package:
 - `packages/framework/fluid-framework/src/index.ts`
@@ -114,17 +148,6 @@ cd packages/framework/fluid-framework && pnpm run build:api-reports
 ```
 
 Only do this if the source package's reports actually changed (check `git diff` on its `api-report/` directory). If the source reports are unchanged, the aggregator's won't be either.
-
-# Step 6: ESLint auto-fix (Full and Thorough only)
-
-For each built changed package, check its `package.json` for the available lint fix script and run it:
-```bash
-# Check which script exists — packages use different names
-cd <package-dir> && node -p "Object.keys(require('./package.json').scripts || {}).filter(s => /eslint.fix|lint.fix/.test(s))"
-cd <package-dir> && pnpm run <script-name>
-```
-
-Common script names: `eslint:fix`, `lint:fix`. Only run what exists. If the script fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
 
 # Step 7: Type test regeneration (Full and Thorough only)
 
