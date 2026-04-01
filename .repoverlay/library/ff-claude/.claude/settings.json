@@ -2,5 +2,9 @@
 	"permissions": {
 		"defaultMode": "auto"
 	},
-	"skipAutoPermissionPrompt": true
+	"skipAutoPermissionPrompt": true,
+	"sandbox": {
+		"enabled": true,
+		"enableWeakerNestedSandbox": true
+	}
 }
