@@ -11,7 +11,7 @@ description: Quick pre-push check that catches common CI failures before you pus
 3. Review script output and report results to the user.
 4. If the user chose Full or Thorough mode and there are unbuilt packages, build them.
 5. For each built changed package, run ESLint auto-fix.
-6. For each built changed package where the user-facing API surface changed, regenerate API reports and check for downstream cascade. Also run `build:docs` to catch TSDoc errors.
+6. For each built changed package, run `build:docs` to catch TSDoc errors. If the user-facing API surface changed, also regenerate API reports and check for downstream cascade.
 7. For each built changed package where the user-facing API surface changed, regenerate type tests.
 8. If the user chose Thorough mode, run tests in changed packages.
 9. Report final status: what was fixed, what needs staging, any remaining issues.
@@ -127,7 +127,7 @@ git checkout -- packages/dds/tree/api-report/tree.alpha.api.md
 For each built changed package that has a `build:docs` script, run it regardless of whether the API surface changed (TSDoc link errors can come from any modified source file):
 
 ```bash
-cd <package-dir> && pnpm run build:docs 2>&1 | grep -E "Error|Warning"
+cd <package-dir> && pnpm run build:docs
 ```
 
 If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag references an ambiguous name (most commonly a member that exists as both a static and instance declaration). Fix by linking to an unambiguous target — for example, link to the interface that declares the member (which has exactly one declaration) rather than the class that exposes it as both static and instance. The TSDoc `:instance`/`:static` system selectors are **not** supported by this version of API Extractor.
