@@ -24,9 +24,9 @@ Before doing anything, ask the user:
 > I'll run a CI readiness check on your branch. Pick a mode (fastest to slowest):
 >
 > 1. **Cancel** — never mind, don't run checks
-> 2. **Quick** — auto-fix formatting only (Biome on changed files); skip all build-dependent checks (~15–20 seconds)
-> 3. **Full** — Quick + build unbuilt packages + regenerate API reports and type tests (~30 seconds – 2 minutes depending on package size)
-> 4. **Thorough** — Full + run tests in changed packages (~30 seconds – 5+ minutes; dominated by test suite size)
+> 2. **Quick** — auto-fix formatting, policy, and syncpack on changed packages; skip build-dependent checks (~30–60 seconds)
+> 3. **Full** — Quick + build unbuilt packages + ESLint + regenerate API reports and type tests (~1–3 minutes depending on package size)
+> 4. **Thorough** — Full + run tests in changed packages (~5+ minutes; dominated by test suite size)
 
 Wait for the user's response. If they say cancel (or anything clearly negative), stop here. Otherwise, note their choice and **immediately create tasks for all remaining steps** as described in the `<required>` block above before proceeding.
 
@@ -35,23 +35,20 @@ Wait for the user's response. If they say cancel (or anything clearly negative),
 Run the bundled script from the repository root:
 
 ```bash
-bash .claude/skills/ci-readiness-check/ci-readiness-check.sh [--quick] [base-branch]
+bash .claude/skills/ci-readiness-check/ci-readiness-check.sh [base-branch]
 ```
 
 The base branch defaults to `main`. Pass a different branch if needed (e.g., `next`).
 
-Pass `--quick` for Quick mode. This skips the full `checks:fix` pipeline (policy is repo-wide and lint is too slow) and only runs Biome formatting on changed files.
-
-The script handles:
+The script always runs the same checks regardless of mode — mode only affects what the agent does afterward:
 - Detecting which packages have changes vs the base branch
 - Installing dependencies if `node_modules` is missing
-- **Quick mode:** Running `biome format --write` on changed files only
-- **Full/Thorough mode:** Running `fluid-build --task checks:fix` scoped to changed packages, which auto-fixes:
+- Running `fluid-build --task checks:fix` scoped to changed packages, which auto-fixes:
   - Formatting (Biome)
   - Policy violations (flub — copyright headers, package.json sorting, etc.)
   - Dependency version consistency (syncpack)
   - Build version consistency
-- **Full/Thorough mode:** Verifying all checks pass after auto-fix (`fluid-build --task checks`)
+- Verifying all checks pass after auto-fix (`fluid-build --task checks`)
 - Checking for a changeset (via `flub check changeset`)
 - Reporting uncommitted changes, categorized (API reports, type tests, other)
 - Reporting which changed packages are built vs not built
