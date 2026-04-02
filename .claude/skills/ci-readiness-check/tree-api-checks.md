@@ -4,13 +4,11 @@ This document is read by the `ci-readiness-check` skill when `@fluidframework/tr
 
 ---
 
-## Before running `build:api-reports`: check for new top-level exports
+## Before running `build:api-reports`: regenerate entrypoint sources if `index.ts` changed
 
-`@fluidframework/tree` uses committed files in `src/entrypoints/` (e.g. `src/entrypoints/alpha.ts`) that explicitly list every named export by API tier. If you added a **new top-level export** (a new type, class, function, or constant at the package root — not just adding members to an existing type), you must regenerate these files before running `build:api-reports`. Otherwise the new export will be missing from the API surface.
+`@fluidframework/tree` uses committed files in `src/entrypoints/` (e.g. `src/entrypoints/alpha.ts`) that explicitly list every named export by API tier. These must be kept in sync with `src/index.ts`.
 
-To check: run `git diff` on `src/entrypoints/` — if your new export doesn't appear there, it needs to be added.
-
-Run the generator:
+**Run `generate:entrypoint-sources` if you touched `src/index.ts`** — this covers all cases that affect the entrypoints: adding or removing a top-level export, and changing the API tier of an existing export (e.g. promoting something from `@alpha` to `@public`). If your changes didn't touch `src/index.ts` at all, skip this step.
 
 ```bash
 cd packages/dds/tree && pnpm run generate:entrypoint-sources
@@ -23,8 +21,6 @@ pnpm run build:esnext
 ```
 
 Verify the fix: `grep "from " lib/entrypoints/public.d.ts` should show `../index.js`, not `./index.js`. Then stage the `src/entrypoints/` changes and proceed to `build:api-reports`.
-
-If your change only adds members to an existing exported type (e.g. a new optional property on an existing interface), skip this — the entrypoints files don't need to change.
 
 ---
 
