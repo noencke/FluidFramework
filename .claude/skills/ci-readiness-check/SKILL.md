@@ -4,17 +4,17 @@ description: Quick pre-push check that catches common CI failures before you pus
 ---
 
 <required>
-*CRITICAL* Add the following steps to your Todo list using TodoWrite:
+Step 1 below asks the user to pick a mode. **Immediately after they respond**, use TaskCreate to create one task per applicable step based on their choice — before doing any other work. Mark each task in_progress when you start it and completed when you finish. This prevents steps from being silently skipped as context grows.
 
-1. Confirm with the user before proceeding.
-2. Run the CI readiness script.
-3. Review script output and report results to the user.
-4. If the user chose Full or Thorough mode and there are unbuilt packages, build them.
-5. For each built changed package, run ESLint auto-fix.
-6. For each built changed package, run `build:docs` to catch TSDoc errors. If the user-facing API surface changed, also regenerate API reports and check for downstream cascade.
-7. For each built changed package where the user-facing API surface changed, regenerate type tests.
-8. If the user chose Thorough mode, run tests in changed packages.
-9. Report final status: what was fixed, what needs staging, any remaining issues.
+Tasks to create by mode:
+
+- **Quick:** Run CI script → Review output → Report final status
+- **Full:** Run CI script → Review output → Build unbuilt packages → ESLint auto-fix → Regenerate API reports → Run build:docs → Regenerate type tests → Report final status
+- **Thorough:** same as Full, plus Run tests
+
+For Full/Thorough: if `@fluidframework/tree` is among the changed packages, add a "Cascade API reports to aggregator packages" task after "Regenerate API reports".
+
+Omit steps that don't apply (e.g. skip "Build unbuilt packages" if everything is already built; skip "Regenerate API reports" and "Regenerate type tests" if the API surface didn't change).
 </required>
 
 # Step 1: Confirm with the user
@@ -28,7 +28,7 @@ Before doing anything, ask the user:
 > 3. **Full** — Quick + build unbuilt packages + regenerate API reports and type tests (~30 seconds – 2 minutes depending on package size)
 > 4. **Thorough** — Full + run tests in changed packages (~30 seconds – 5+ minutes; dominated by test suite size)
 
-Wait for the user's response. If they say cancel (or anything clearly negative), stop here. Otherwise, note their choice and proceed.
+Wait for the user's response. If they say cancel (or anything clearly negative), stop here. Otherwise, note their choice and **immediately create tasks for all remaining steps** as described in the `<required>` block above before proceeding.
 
 # Step 2: Run the script
 
