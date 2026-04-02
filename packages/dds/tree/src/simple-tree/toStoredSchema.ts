@@ -454,7 +454,9 @@ function getStoredFieldKind(
 	f: SimpleFieldSchema,
 	options: SimpleSchemaTransformationOptions,
 ): FieldKind {
-	if (!isStoredFromView(options)) return f.kind;
+	if (!isStoredFromView(options)) {
+		return f.kind;
+	}
 	const { isOptionalStaged } = f;
 	if (isOptionalStaged === undefined || isOptionalStaged === false) return f.kind;
 	// isOptionalStaged is a SchemaUpgrade — use includeStagedOptional to decide the stored kind.
