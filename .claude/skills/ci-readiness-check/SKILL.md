@@ -79,10 +79,10 @@ cd <package-dir> && pnpm exec fluid-build . --task compile
 
 For each built changed package, run:
 ```bash
-cd <package-dir> && pnpm exec fluid-build . -t lint:fix
+cd <package-dir> && pnpm run eslint:fix
 ```
 
-`lint:fix` is the canonical lint entry point across all packages; fluid-build dispatches it to the correct underlying scripts (`eslint:fix`, formatting, etc.). If it fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
+All packages define `eslint:fix` as a direct ESLint invocation. If it fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
 
 # Determining if the public API surface changed
 
@@ -108,7 +108,7 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 For each built changed package that has a `build:api-reports` script, and where the public API surface likely changed (see criteria above):
 
 ```bash
-cd <package-dir> && pnpm exec fluid-build . -t build:api-reports
+cd <package-dir> && pnpm run build:api-reports
 ```
 
 If API Extractor fails with `ae-missing-release-tag` (most commonly in `@fluidframework/tree`), the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
@@ -141,8 +141,8 @@ If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag ref
 If `@fluidframework/tree`'s API reports actually changed (check `git diff` on `packages/dds/tree/api-report/`), also regenerate the aggregator packages that re-export from it:
 
 ```bash
-cd packages/framework/fluid-framework && pnpm exec fluid-build . -t build:api-reports
-cd packages/service-clients/azure-client && pnpm exec fluid-build . -t build:api-reports
+cd packages/framework/fluid-framework && pnpm run build:api-reports
+cd packages/service-clients/azure-client && pnpm run build:api-reports
 ```
 
 If the tree reports are unchanged, skip this — the aggregator reports won't change either.
