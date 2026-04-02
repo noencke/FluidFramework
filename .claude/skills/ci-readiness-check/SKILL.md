@@ -8,11 +8,11 @@ Step 1 below asks the user to pick a mode. **Immediately after they respond**, u
 
 Tasks to create by mode:
 
-- **Quick:** Run CI script → Review output → Report final status
-- **Full:** Run CI script → Review output → Build unbuilt packages → ESLint auto-fix → Regenerate API reports → Run build:docs → Regenerate type tests → Report final status
-- **Thorough:** same as Full, plus Run tests
+- **Check:** Run CI script → Review output → Report final status
+- **Build:** Run CI script → Review output → Build unbuilt packages → ESLint auto-fix → Regenerate API reports → Run build:docs → Regenerate type tests → Report final status
+- **Test:** same as Build, plus Run tests
 
-For Full/Thorough: if `@fluidframework/tree` is among the changed packages **and its API surface likely changed**, add a "Cascade API reports to aggregator packages" task after "Regenerate API reports".
+For Build/Test: if `@fluidframework/tree` is among the changed packages **and its API surface likely changed**, add a "Cascade API reports to aggregator packages" task after "Regenerate API reports".
 
 Omit steps that don't apply (e.g. skip "Build unbuilt packages" if everything is already built; skip "Regenerate API reports" and "Regenerate type tests" if the API surface didn't change).
 </required>
@@ -24,9 +24,9 @@ Before doing anything, ask the user:
 > I'll run a CI readiness check on your branch. Pick a mode (fastest to slowest):
 >
 > 1. **Cancel** — never mind, don't run checks
-> 2. **Quick** — auto-fix formatting, policy, and syncpack on changed packages; skip build-dependent checks (~30–60 seconds)
-> 3. **Full** — Quick + build unbuilt packages + ESLint + regenerate API reports and type tests (~1–3 minutes depending on package size)
-> 4. **Thorough** — Full + run tests in changed packages (~5+ minutes; dominated by test suite size)
+> 2. **Check** — auto-fix formatting, policy, and syncpack on changed packages (~30–60 seconds)
+> 3. **Build** — Check + build unbuilt packages + ESLint + regenerate API reports and type tests (~1–3 minutes)
+> 4. **Test** — Build + run the test suite in changed packages (~5+ minutes; dominated by test suite size)
 
 Wait for the user's response. If they say cancel (or anything clearly negative), stop here. Otherwise, note their choice and **immediately create tasks for all remaining steps** as described in the `<required>` block above before proceeding.
 
@@ -62,9 +62,9 @@ Read the script output. Report to the user:
 - Changeset status
 - Uncommitted files
 
-**Quick mode stops here.** In Quick mode, skip steps 4–8 entirely — even for packages that happen to be already built. Note what was skipped in the final report (step 9).
+**Check mode stops here.** In Check mode, skip steps 4–8 entirely — even for packages that happen to be already built. Note what was skipped in the final report (step 9).
 
-# Step 4: Handle unbuilt packages (Full and Thorough only)
+# Step 4: Handle unbuilt packages (Build and Test only)
 
 If the script reports unbuilt packages, build them:
 
@@ -72,7 +72,7 @@ If the script reports unbuilt packages, build them:
 cd <package-dir> && pnpm exec fluid-build . --task compile
 ```
 
-# Step 5: ESLint auto-fix (Full and Thorough only)
+# Step 5: ESLint auto-fix (Build and Test only)
 
 For each built changed package, run:
 ```bash
@@ -98,7 +98,7 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 
 **Why be conservative:** Running `build:api-reports` when nothing actually changed can introduce spurious diffs that look like real API changes. This is especially true for `@fluidframework/tree` and `fluid-framework`, which have a known API Extractor bug that non-deterministically reorders some generated types. Only run it when you're confident the public API actually changed.
 
-# Step 6: API reports and cross-package cascade (Full and Thorough only)
+# Step 6: API reports and cross-package cascade (Build and Test only)
 
 > **If `@fluidframework/tree` is among the changed packages AND its API surface likely changed** (per the criteria above): read `.claude/skills/ci-readiness-check/tree-api-checks.md` now. It has required pre-steps (before `build:api-reports`) and post-steps (after `build:api-reports` and cascade) specific to that package. Do this before proceeding with 6a. For pure implementation changes to tree (no exported signature changes), skip it.
 
@@ -124,7 +124,7 @@ cd <package-dir> && pnpm run build:docs
 
 If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag references an ambiguous name (most commonly a member that exists as both a static and instance declaration). Fix by linking to an unambiguous target — for example, link to the interface that declares the member (which has exactly one declaration) rather than the class that exposes it as both static and instance. The TSDoc `:instance`/`:static` system selectors are **not** supported by this version of API Extractor.
 
-# Step 7: Type test regeneration (Full and Thorough only)
+# Step 7: Type test regeneration (Build and Test only)
 
 For each built changed package that has a `typetests:gen` script in its `package.json`, and where the public API surface likely changed (see criteria above):
 
@@ -136,7 +136,7 @@ Not all packages have type tests. Only run this where the script exists.
 
 # Step 8: Run tests (Thorough mode only)
 
-If the user chose **Thorough** mode, run tests in each built changed package. Check the package's `package.json` for available test scripts and run whichever exist:
+If the user chose **Test** mode, run tests in each built changed package. Check the package's `package.json` for available test scripts and run whichever exist:
 
 ```bash
 cd <package-dir> && pnpm run test:mocha
