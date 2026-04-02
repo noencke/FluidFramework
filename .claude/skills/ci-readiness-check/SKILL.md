@@ -24,9 +24,9 @@ Before doing anything, ask the user:
 > I'll run a CI readiness check on your branch. Pick a mode (fastest to slowest):
 >
 > 1. **Cancel** — never mind, don't run checks
-> 2. **Check** — auto-fix formatting, policy, and syncpack on changed packages (~30–60 seconds)
-> 3. **Build** — Check + build unbuilt packages + ESLint + regenerate API reports and type tests (~1–3 minutes)
-> 4. **Test** — Build + run the test suite in changed packages (~5+ minutes; dominated by test suite size)
+> 2. **Check** — auto-fix formatting, policy, and syncpack on changed packages (~5–10 seconds; always fast)
+> 3. **Build** — Check + build unbuilt packages + ESLint + regenerate API reports and type tests (~10–20 seconds if packages are already built; longer if a fresh compile is needed)
+> 4. **Test** — Build + run the test suite in changed packages (non-tree packages: ~10–30 seconds; tree: ~3+ minutes)
 
 Wait for the user's response. If they say cancel (or anything clearly negative), stop here. Otherwise, note their choice and **immediately create tasks for all remaining steps** as described in the `<required>` block above before proceeding.
 
@@ -134,7 +134,7 @@ cd <package-dir> && pnpm run typetests:gen
 
 Not all packages have type tests. Only run this where the script exists.
 
-# Step 8: Run tests (Thorough mode only)
+# Step 8: Run tests (Test mode only)
 
 If the user chose **Test** mode, run tests in each built changed package. Check the package's `package.json` for available test scripts and run whichever exist:
 
@@ -151,7 +151,7 @@ Run `git status` and report to the user:
 
 1. **Files auto-fixed** — formatting, policy, ESLint fixes. These are unstaged; the user should review and stage them.
 2. **Generated files updated** — API reports, type tests. These need to be committed with the PR.
-3. **Test results** — if Thorough mode, report pass/fail per package.
+3. **Test results** — if Test mode, report pass/fail per package.
 4. **Remaining issues** — anything the skill couldn't auto-fix (check failures, missing changeset, etc.).
 5. **Skipped checks** — anything skipped due to mode choice or unbuilt packages.
 
