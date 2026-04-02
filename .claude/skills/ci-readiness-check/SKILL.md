@@ -12,7 +12,7 @@ Tasks to create by mode:
 - **Full:** Run CI script → Review output → Build unbuilt packages → ESLint auto-fix → Regenerate API reports → Run build:docs → Regenerate type tests → Report final status
 - **Thorough:** same as Full, plus Run tests
 
-For Full/Thorough: if `@fluidframework/tree` is among the changed packages, add a "Cascade API reports to aggregator packages" task after "Regenerate API reports".
+For Full/Thorough: if `@fluidframework/tree` is among the changed packages **and its API surface likely changed**, add a "Cascade API reports to aggregator packages" task after "Regenerate API reports".
 
 Omit steps that don't apply (e.g. skip "Build unbuilt packages" if everything is already built; skip "Regenerate API reports" and "Regenerate type tests" if the API surface didn't change).
 </required>
@@ -103,7 +103,7 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 
 # Step 6: API reports and cross-package cascade (Full and Thorough only)
 
-> **If `@fluidframework/tree` is among the changed packages:** read `.claude/skills/ci-readiness-check/tree-api-checks.md` now. It has required pre-steps (before `build:api-reports`) and post-steps (after `build:api-reports` and cascade) specific to that package. Do this before proceeding with 6a.
+> **If `@fluidframework/tree` is among the changed packages AND its API surface likely changed** (per the criteria above): read `.claude/skills/ci-readiness-check/tree-api-checks.md` now. It has required pre-steps (before `build:api-reports`) and post-steps (after `build:api-reports` and cascade) specific to that package. Do this before proceeding with 6a. For pure implementation changes to tree (no exported signature changes), skip it.
 
 ## 6a. Regenerate API reports
 
