@@ -77,14 +77,12 @@ cd <package-dir> && pnpm exec fluid-build . --task compile
 
 # Step 5: ESLint auto-fix (Full and Thorough only)
 
-For each built changed package, check its `package.json` for the available lint fix script and run it:
+For each built changed package, run:
 ```bash
-# Check which script exists — packages use different names
-cd <package-dir> && node -p "Object.keys(require('./package.json').scripts || {}).filter(s => /eslint.fix|lint.fix/.test(s))"
-cd <package-dir> && pnpm run <script-name>
+cd <package-dir> && pnpm exec fluid-build . -t lint:fix
 ```
 
-Common script names: `eslint:fix`, `lint:fix`. Only run what exists. If the script fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
+`lint:fix` is the canonical lint entry point across all packages; fluid-build dispatches it to the correct underlying scripts (`eslint:fix`, formatting, etc.). If it fails due to non-auto-fixable errors, note them but do not block — CI will catch those.
 
 # Determining if the public API surface changed
 
@@ -110,7 +108,7 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 For each built changed package that has a `build:api-reports` script, and where the public API surface likely changed (see criteria above):
 
 ```bash
-cd <package-dir> && pnpm run build:api-reports
+cd <package-dir> && pnpm exec fluid-build . -t build:api-reports
 ```
 
 If API Extractor fails with `ae-missing-release-tag` (most commonly in `@fluidframework/tree`), the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
@@ -140,20 +138,16 @@ If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag ref
 
 ## 6c. Cross-package cascade
 
-After regenerating API reports for a package, check if any "aggregator" packages re-export from it. If so, their API reports are now stale too.
+If `@fluidframework/tree`'s API reports actually changed (check `git diff` on `packages/dds/tree/api-report/`), also regenerate the aggregator packages that re-export from it:
 
-Read the source index files of these aggregator packages and look for imports from the changed package:
-- `packages/framework/fluid-framework/src/index.ts`
-- `packages/service-clients/azure-client/src/index.ts`
-
-For example, if you changed `@fluidframework/tree` and `fluid-framework/src/index.ts` contains `export * from "@fluidframework/tree/alpha"`, then also run:
 ```bash
-cd packages/framework/fluid-framework && pnpm run build:api-reports
+cd packages/framework/fluid-framework && pnpm exec fluid-build . -t build:api-reports
+cd packages/service-clients/azure-client && pnpm exec fluid-build . -t build:api-reports
 ```
 
-Only do this if the source package's reports actually changed (check `git diff` on its `api-report/` directory). If the source reports are unchanged, the aggregator's won't be either.
+If the tree reports are unchanged, skip this — the aggregator reports won't change either.
 
-If you ran `build:api-reports` on `fluid-framework`, apply the same phantom key-reorder check described in step 6a — the same bug affects its report for the same reason.
+After running either of these, apply the same phantom key-reorder check described in step 6a — the same bug affects their reports for the same reason.
 
 # Step 7: Type test regeneration (Full and Thorough only)
 
