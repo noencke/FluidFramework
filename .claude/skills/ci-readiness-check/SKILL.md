@@ -99,7 +99,7 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 - Only comments, documentation, or non-code files changed
 - Only a function body changed (not its signature)
 
-**Why be conservative:** There is a known bug in API Extractor where it non-deterministically reorders some generated types in the `@fluidframework/tree` package (and, by cascade, `fluid-framework`). The output differs between local and CI builds, producing bogus diffs that look like real changes but aren't. Running API Extractor unnecessarily on those packages can introduce phantom diffs. Only run it when you're confident the public API actually changed.
+**Why be conservative:** There is a known bug in API Extractor that non-deterministically reorders some generated types in the `@fluidframework/tree` package (and, by cascade, `fluid-framework`). The ordering is stable within a single fresh compilation (local and CI will agree), but it can silently flip between different compilations — e.g. after clearing `tsbuildinfo` or after TypeScript version changes. Running `build:api-reports` unnecessarily on those packages can produce a phantom diff that looks like a real API change but isn't. Only run it when you're confident the public API actually changed.
 
 # Step 6: API reports and cross-package cascade (Full and Thorough only)
 
@@ -129,16 +129,17 @@ Verify the fix: `grep "from " lib/entrypoints/public.d.ts` should show `../index
 
 If your change only adds members to an *existing* exported type (e.g. a new optional property on an existing interface), skip this — the entrypoints files don't need to change.
 
-**Only `@fluidframework/tree`: check for phantom key-reorder diffs.** After running `build:api-reports`, check `git diff` on the updated report. The known bug (see "Why be conservative" above) can produce spurious reorderings of union key strings within `Omit<>` type signatures — e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"` — with no real API change. There are three cases:
+**Only `@fluidframework/tree`: check for phantom key-reorder diffs.** After running `build:api-reports`, check `git diff` on the updated report. The known bug (see "Why be conservative" above) can produce spurious reorderings of union key strings within `Omit<>` type signatures — e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"` — with no real API change.
 
-1. **The only diff is key reorderings** (no real API additions/removals): The entire diff is spurious. Restore the file and do not commit it:
-   ```bash
-   git checkout -- packages/dds/tree/api-report/tree.alpha.api.md
-   ```
+A key-reorder diff is a phantom if: only the order of string literal keys in an `Omit<>` changes, nothing is added or removed.
 
-2. **The diff contains both real API changes and key reorderings in unrelated places:** Commit your real changes but manually revert the key-reorder lines. Open the file and flip the affected `"keyA" | "keyB"` back to whatever order is already committed — the reordering is spurious and must not appear in the PR diff.
+**Always commit the file that `build:api-reports` produces** — do not manually flip key order or restore from git. The local fresh build and CI agree on the same ordering, so the build output is exactly what CI expects. If you restore the old order instead, CI will fail.
 
-3. **A key reordering appears within your newly added API:** This is exceedingly rare (the new type uses `Omit<>` and was emitted in a different key order). Commit whatever order the file has — there is no "right" order — and accept that CI may flip it back on the next regeneration. Flag this to the user.
+There are two situations:
+
+1. **The only diff is key reorderings** (no real API additions/removals): Commit the updated file. The reordering is spurious but CI requires it.
+
+2. **The diff contains both real API changes and key reorderings:** Commit the entire file as-is. Both the real changes and the reorderings match what CI will produce.
 
 ## 6b. Run `build:docs` to catch TSDoc errors
 
