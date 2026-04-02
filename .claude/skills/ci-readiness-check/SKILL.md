@@ -99,9 +99,11 @@ Steps 6 and 7 require judging whether a package's public API surface changed. Us
 - Only comments, documentation, or non-code files changed
 - Only a function body changed (not its signature)
 
-**Why be conservative:** There is a known bug in API Extractor that non-deterministically reorders some generated types in the `@fluidframework/tree` package (and, by cascade, `fluid-framework`). The ordering is stable within a single fresh compilation (local and CI will agree), but it can silently flip between different compilations — e.g. after clearing `tsbuildinfo` or after TypeScript version changes. Running `build:api-reports` unnecessarily on those packages can produce a phantom diff that looks like a real API change but isn't. Only run it when you're confident the public API actually changed.
+**Why be conservative:** Running `build:api-reports` when nothing actually changed can introduce spurious diffs that look like real API changes. This is especially true for `@fluidframework/tree` and `fluid-framework`, which have a known API Extractor bug that non-deterministically reorders some generated types. Only run it when you're confident the public API actually changed.
 
 # Step 6: API reports and cross-package cascade (Full and Thorough only)
+
+> **If `@fluidframework/tree` is among the changed packages:** read `.claude/skills/ci-readiness-check/tree-api-checks.md` now. It has required pre-steps (before `build:api-reports`) and post-steps (after `build:api-reports` and cascade) specific to that package. Do this before proceeding with 6a.
 
 ## 6a. Regenerate API reports
 
@@ -111,35 +113,7 @@ For each built changed package that has a `build:api-reports` script, and where 
 cd <package-dir> && pnpm exec fluid-build . -t build:api-reports
 ```
 
-If API Extractor fails with `ae-missing-release-tag` (most commonly in `@fluidframework/tree`), the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
-
-**Only `@fluidframework/tree`: run `generate:entrypoint-sources` if you added new top-level exports.** `@fluidframework/tree` uses committed files in `src/entrypoints/` (e.g. `src/entrypoints/alpha.ts`) that explicitly list every named export by API tier. If you added a *new* top-level export (new type, class, function, or constant at the package root — not just adding members to an existing type), you must regenerate these files before running `build:api-reports`, otherwise the new export will be missing from the API surface:
-
-```bash
-cd packages/dds/tree && pnpm run generate:entrypoint-sources
-```
-
-This script writes to both `src/entrypoints/*.ts` and `lib/entrypoints/*.d.ts`. The `lib/` copy it writes has wrong import paths and must be fixed by rebuilding immediately after:
-
-```bash
-pnpm run build:esnext
-```
-
-Verify the fix: `grep "from " lib/entrypoints/public.d.ts` should show `../index.js`, not `./index.js`. Then stage the `src/entrypoints/` changes and proceed to `build:api-reports`.
-
-If your change only adds members to an *existing* exported type (e.g. a new optional property on an existing interface), skip this — the entrypoints files don't need to change.
-
-**Only `@fluidframework/tree`: check for phantom key-reorder diffs.** After running `build:api-reports`, check `git diff` on the updated report. The known bug (see "Why be conservative" above) can produce spurious reorderings of union key strings within `Omit<>` type signatures — e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"` — with no real API change.
-
-A key-reorder diff is a phantom if: only the order of string literal keys in an `Omit<>` changes, nothing is added or removed.
-
-**Always commit the file that `build:api-reports` produces** — do not manually flip key order or restore from git. The local fresh build and CI agree on the same ordering, so the build output is exactly what CI expects. If you restore the old order instead, CI will fail.
-
-There are two situations:
-
-1. **The only diff is key reorderings** (no real API additions/removals): Commit the updated file. The reordering is spurious but CI requires it.
-
-2. **The diff contains both real API changes and key reorderings:** Commit the entire file as-is. Both the real changes and the reorderings match what CI will produce.
+If API Extractor fails with `ae-missing-release-tag`, the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
 
 ## 6b. Run `build:docs` to catch TSDoc errors
 
@@ -152,19 +126,6 @@ cd <package-dir> && pnpm run build:docs
 ```
 
 If you see `ae-unresolved-link` errors, the `{@link}` or `{@inheritdoc}` tag references an ambiguous name (most commonly a member that exists as both a static and instance declaration). Fix by linking to an unambiguous target — for example, link to the interface that declares the member (which has exactly one declaration) rather than the class that exposes it as both static and instance. The TSDoc `:instance`/`:static` system selectors are **not** supported by this version of API Extractor.
-
-## 6c. Cross-package cascade
-
-If `@fluidframework/tree`'s API reports actually changed (check `git diff` on `packages/dds/tree/api-report/`), also regenerate the aggregator packages that re-export from it:
-
-```bash
-cd packages/framework/fluid-framework && pnpm exec fluid-build . -t build:api-reports
-cd packages/service-clients/azure-client && pnpm exec fluid-build . -t build:api-reports
-```
-
-If the tree reports are unchanged, skip this — the aggregator reports won't change either.
-
-After running either of these, apply the same phantom key-reorder check described in step 6a — the same bug affects their reports for the same reason.
 
 # Step 7: Type test regeneration (Full and Thorough only)
 
