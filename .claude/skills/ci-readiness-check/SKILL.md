@@ -115,20 +115,16 @@ cd <package-dir> && pnpm run build:api-reports
 
 If API Extractor fails with `ae-missing-release-tag` (most commonly in `@fluidframework/tree`), the new export needs a TSDoc release tag (`@alpha`, `@beta`, `@public`, or `@internal`). Add the appropriate tag to the function/class/interface, rebuild the package, then retry `build:api-reports`. Check other exports in the same package to see which tag is conventional — most public exports use `@public`.
 
-**Phantom key-reorder diffs in `@fluidframework/tree` (and `fluid-framework`):** There is a known bug where API Extractor non-deterministically reorders union key strings within `Omit<>` type signatures — e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"` — depending on whether TypeScript compiled incrementally (local) or from scratch (CI). This affects the `@fluidframework/tree` API report directly, and also `fluid-framework`'s report because it re-exports from `@fluidframework/tree` and API Extractor processes them the same way.
-
-After running `build:api-reports` on either package, check `git diff` on the updated report for these reorderings. There are three cases:
+**Only `@fluidframework/tree`: check for phantom key-reorder diffs.** After running `build:api-reports`, check `git diff` on the updated report. The known bug (see "Why be conservative" above) can produce spurious reorderings of union key strings within `Omit<>` type signatures — e.g. `"keyA" | "keyB"` swapped to `"keyB" | "keyA"` — with no real API change. There are three cases:
 
 1. **The only diff is key reorderings** (no real API additions/removals): The entire diff is spurious. Restore the file and do not commit it:
    ```bash
    git checkout -- packages/dds/tree/api-report/tree.alpha.api.md
-   # and/or
-   git checkout -- packages/framework/fluid-framework/api-report/fluid-framework.alpha.api.md
    ```
 
-2. **The diff contains both real API changes and key reorderings in unrelated places:** Commit your real changes but manually revert the key-reorder lines. Open the file and flip the affected `"keyA" | "keyB"` back to whatever order is already committed — the reordering is spurious and must not appear in the PR diff. The real changes should be left as-is.
+2. **The diff contains both real API changes and key reorderings in unrelated places:** Commit your real changes but manually revert the key-reorder lines. Open the file and flip the affected `"keyA" | "keyB"` back to whatever order is already committed — the reordering is spurious and must not appear in the PR diff.
 
-3. **A key reordering appears within your newly added API:** This is exceedingly rare. It likely means the new type uses `Omit<>` and happened to be emitted in a different key order. In this case, commit whatever order the file has — there is no "right" order — and accept that CI may flip it back on the next regeneration. Flag this to the user.
+3. **A key reordering appears within your newly added API:** This is exceedingly rare (the new type uses `Omit<>` and was emitted in a different key order). Commit whatever order the file has — there is no "right" order — and accept that CI may flip it back on the next regeneration. Flag this to the user.
 
 ## 6b. Run `build:docs` to catch TSDoc errors
 
@@ -156,6 +152,8 @@ cd packages/framework/fluid-framework && pnpm run build:api-reports
 ```
 
 Only do this if the source package's reports actually changed (check `git diff` on its `api-report/` directory). If the source reports are unchanged, the aggregator's won't be either.
+
+If you ran `build:api-reports` on `fluid-framework`, apply the same phantom key-reorder check described in step 6a — the same bug affects its report for the same reason.
 
 # Step 7: Type test regeneration (Full and Thorough only)
 
