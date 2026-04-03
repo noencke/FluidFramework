@@ -421,7 +421,7 @@ export class FieldSchemaAlpha<
 		return this.propsAlpha?.persistedMetadata;
 	}
 
-	public get isOptionalStaged(): false | SchemaUpgrade {
+	public get isStagedOptional(): false | SchemaUpgrade {
 		return this.propsAlpha?.stagedOptionalUpgrade ?? false;
 	}
 

@@ -363,11 +363,11 @@ function* getFieldDiscrepancies(
 		fail(0xbef /* A conversion from a FieldKind to a FlexFieldKind should exist */);
 
 	// This checks if the field kind in the view schema is not compatible with the stored schema.
-	// A staged optional field (Optional in the view) is compatible with a Required stored field
+	// A staged optional field (optional in the view) is compatible with a required stored field
 	// during the rollout period — suppress the kind discrepancy in that case.
 	if (
 		viewKind.identifier !== stored.kind &&
-		!(view.isOptionalStaged !== false && stored.kind === FieldKinds.required.identifier)
+		!(view.isStagedOptional !== false && stored.kind === FieldKinds.required.identifier)
 	) {
 		yield {
 			identifier,

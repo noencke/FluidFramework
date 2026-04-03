@@ -392,7 +392,7 @@ export class FieldSchemaAlpha<Kind extends FieldKind = FieldKind, Types extends 
     // (undocumented)
     get allowedTypesIdentifiers(): ReadonlySet<string>;
     // (undocumented)
-    get isOptionalStaged(): false | SchemaUpgrade;
+    get isStagedOptional(): false | SchemaUpgrade;
     // (undocumented)
     get persistedMetadata(): JsonCompatibleReadOnlyObject | undefined;
     // (undocumented)
@@ -1243,7 +1243,7 @@ export interface SimpleArrayNodeSchema<Type extends SchemaType = SchemaType, out
 
 // @alpha @sealed
 export interface SimpleFieldSchema<Type extends SchemaType = SchemaType> {
-    readonly isOptionalStaged?: Type extends SchemaType.Stored ? undefined : false | SchemaUpgrade;
+    readonly isStagedOptional?: Type extends SchemaType.Stored ? undefined : false | SchemaUpgrade;
     readonly kind: FieldKind;
     readonly metadata: FieldSchemaMetadata & (Type extends SchemaType.View ? unknown : {
         readonly custom?: undefined;

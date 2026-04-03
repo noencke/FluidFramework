@@ -426,9 +426,9 @@ function filterFieldAllowedTypes(
 	f: SimpleFieldSchema,
 	options: SimpleSchemaTransformationOptions,
 ): SimpleFieldSchema {
-	const isOptionalStaged =
-		preservesViewData(options) && f.isOptionalStaged instanceof SchemaUpgrade
-			? f.isOptionalStaged
+	const isStagedOptional =
+		preservesViewData(options) && f.isStagedOptional instanceof SchemaUpgrade
+			? f.isStagedOptional
 			: undefined;
 	return {
 		kind: getStoredFieldKind(f, options),
@@ -440,7 +440,7 @@ function filterFieldAllowedTypes(
 				}
 			: {},
 		simpleAllowedTypes: filterAllowedTypes(f.simpleAllowedTypes, options),
-		...(isOptionalStaged === undefined ? {} : { isOptionalStaged }),
+		...(isStagedOptional === undefined ? {} : { isStagedOptional }),
 	};
 }
 
@@ -457,10 +457,10 @@ function getStoredFieldKind(
 	if (!isStoredFromView(options)) {
 		return f.kind;
 	}
-	const { isOptionalStaged } = f;
-	if (isOptionalStaged === undefined || isOptionalStaged === false) return f.kind;
-	// isOptionalStaged is a SchemaUpgrade — use includeStagedOptional to decide the stored kind.
-	return options.includeStagedOptional(isOptionalStaged) ? f.kind : FieldKind.Required;
+	const { isStagedOptional } = f;
+	if (isStagedOptional === undefined || isStagedOptional === false) return f.kind;
+	// isStagedOptional is a SchemaUpgrade — use includeStagedOptional to decide the stored kind.
+	return options.includeStagedOptional(isStagedOptional) ? f.kind : FieldKind.Required;
 }
 
 /**

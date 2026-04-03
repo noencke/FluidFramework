@@ -295,11 +295,16 @@ export interface SimpleFieldSchema<Type extends SchemaType = SchemaType> {
 	 * `false` if this is a view schema field that is not staged optional.
 	 * Absent (`undefined`) if derived from a stored schema (where staged optional has no meaning).
 	 *
+	 * `false` and `undefined` are both "not staged optional," but distinct: `false` means "view field, explicitly
+	 * not staged optional" while `undefined` means "stored schema" (or a legacy view field that predates this feature).
+	 * Consumers that need to check for staged optional should compare against `false` (e.g., `!== false`) rather than
+	 * checking truthiness, so that legacy `undefined` view fields are handled correctly.
+	 *
 	 * @privateRemarks
 	 * Analogous to {@link SimpleAllowedTypeAttributes.isStaged} for allowed types.
 	 * Optional (`?`) so that existing code constructing `SimpleFieldSchema` object literals does not need to be updated.
 	 */
-	readonly isOptionalStaged?: Type extends SchemaType.Stored
+	readonly isStagedOptional?: Type extends SchemaType.Stored
 		? undefined
 		: false | SchemaUpgrade;
 }

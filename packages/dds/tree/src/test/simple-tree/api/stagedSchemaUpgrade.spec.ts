@@ -30,7 +30,7 @@ import { TestSchemaRepository, TestTreeProviderLite } from "../../utils.js";
 
 // Some documentation links to this file on GitHub: renaming it may break those links.
 
-describe("staged schema upgrade", () => {
+describe("staged allowed type upgrade", () => {
 	// Schema A: only number allowed
 	const schemaA = SchemaFactoryAlpha.optional([SchemaFactoryAlpha.number]);
 
