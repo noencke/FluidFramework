@@ -513,7 +513,7 @@ export class SchemaFactoryAlpha<
 	public static readonly stagedOptional = schemaStaticsAlpha.stagedOptional;
 
 	/**
-	 * Define a {@link TreeNodeSchema} for a {@link TreeMapNode}.
+	 * Define a {@link TreeNodeSchema} for a {@link TreeMapNodeAlpha}.
 	 *
 	 * @param name - Unique identifier for this schema within this factory's scope.
 	 * @param allowedTypes - The types that may appear as values in the map.
