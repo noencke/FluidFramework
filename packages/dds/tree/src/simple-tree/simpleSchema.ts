@@ -288,7 +288,7 @@ export interface SimpleFieldSchema<Type extends SchemaType = SchemaType> {
 	readonly persistedMetadata?: JsonCompatibleReadOnlyObject | undefined;
 
 	/**
-	 * {@link SchemaUpgrade} if this field is included as a {@link SchemaStaticsAlpha.stagedOptional | staged optional} field,
+	 * Indicates that this field is a {@link SchemaStaticsAlpha.stagedOptional | staged optional} field,
 	 * allowing the view schema to be compatible with stored schema where the field is required (pre-upgrade) or optional (post-upgrade).
 	 * New documents and schema upgrades will keep the field as required in the stored schema.
 	 *

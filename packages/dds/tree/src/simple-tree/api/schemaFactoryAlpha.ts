@@ -154,7 +154,7 @@ export interface SchemaStaticsAlpha {
 	 *
 	 * 1. Start with `sf.required(T)` — all clients require the field.
 	 * 2. Deploy `sf.stagedOptional(T)` — new clients can read documents where the field is present or absent, but the stored schema stays Required (so old clients are unaffected). Writing `undefined` is blocked at runtime.
-	 * 3. Deploy `sf.optional(T)` once all clients support the optional field — the stored schema becomes Optional and the field can be cleared.
+	 * 3. Deploy `sf.optional(T)` once all clients support the staged optional field — the stored schema becomes Optional and the field can be cleared.
 	 *
 	 * Analogous to {@link SchemaStaticsBeta.staged} for allowed types, but for field optionality.
 	 *
