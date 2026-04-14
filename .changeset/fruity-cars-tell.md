@@ -14,6 +14,7 @@ Migration path:
 1. Start with `sf.required(T)` - all clients require the field.
 2. Deploy `sf.stagedOptional(T)` - new clients see the field as optional and can read documents
    whether the field is present or absent, but the stored schema stays required so old clients
-   are not broken. Writing `undefined` is blocked at runtime during this phase.
+   are not broken. Setting the field to `undefined` is rejected because the stored schema
+   still declares the field as required.
 3. Deploy `sf.optional(T)` once all clients have been updated - the stored schema becomes
    optional and the field can be cleared.
