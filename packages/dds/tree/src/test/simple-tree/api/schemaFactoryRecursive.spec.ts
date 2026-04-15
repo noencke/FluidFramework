@@ -102,8 +102,9 @@ describe("SchemaFactory Recursive methods", () => {
 		describe("stagedOptionalRecursive", () => {
 			const field = SchemaFactoryAlpha.stagedOptional(SchemaFactoryAlpha.number);
 
-			const fieldRecursive =
-				SchemaFactoryAlpha.stagedOptionalRecursive(SchemaFactoryAlpha.number);
+			const fieldRecursive = SchemaFactoryAlpha.stagedOptionalRecursive(
+				SchemaFactoryAlpha.number,
+			);
 
 			{
 				allowUnused<requireTrue<areSafelyAssignable<typeof field, typeof fieldRecursive>>>();

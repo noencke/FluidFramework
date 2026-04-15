@@ -302,11 +302,8 @@ const stagedOptional = <const T extends ImplicitAllowedTypes, const TCustomMetad
 
 const schemaStaticsAlpha: SchemaStaticsAlpha = {
 	withDefault,
-
 	withDefaultRecursive: withDefault as SchemaStaticsAlpha["withDefaultRecursive"],
-
 	stagedOptional,
-
 	stagedOptionalRecursive: stagedOptional as SchemaStaticsAlpha["stagedOptionalRecursive"],
 };
 
