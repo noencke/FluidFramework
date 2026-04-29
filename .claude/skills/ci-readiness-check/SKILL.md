@@ -4,7 +4,16 @@ description: Use when the user explicitly asks for a CI check or to push their b
 ---
 
 <required>
-Step 1 asks the user to pick a mode. Immediately after they respond, create one task/todo item per applicable step using your available task tooling (TaskCreate for Claude, TodoWrite for Copilot) — before doing any other work. Mark each task in_progress when you start it and completed when you finish. This prevents steps from being silently skipped as context grows.
+**You MUST ask the user the Step 1 mode-choice question before doing anything else.** Do not pick a mode for them. Do not default to a mode. Auto/autonomous mode does NOT authorize you to skip this question - being in auto mode is never a valid reason to bypass the prompt.
+
+There are exactly two narrow exceptions where you MAY proceed without asking. Both must be applied conservatively; if you are not certain an exception applies, you MUST ask.
+
+1. **No-op since the last check in this conversation.** The most recent CI readiness check in the *current* conversation already ran, and every change since then is obviously/provably outside the scope of any check the skill performs (e.g. edits only to comments, unrelated markdown, or files the skill does not touch).
+2. **Explicit standing instruction.** The user has explicitly told you — in this conversation or in a saved memory entry — to auto-skip the CI readiness check without asking. Inferred preference, prior approvals of past runs, or general "be less interruptive" guidance does NOT qualify.
+
+When you apply an exception, you MUST report — every single time, with no abbreviation across repeated runs — that you skipped and which exception applied. Silent skipping is forbidden.
+
+When neither exception applies, ask the user and wait for their response. Immediately after they respond, create one task/todo item per applicable step using your available task tooling (TaskCreate for Claude, TodoWrite for Copilot) — before doing any other work. Mark each task in_progress when you start it and completed when you finish. This prevents steps from being silently skipped as context grows.
 
 Tasks to create by mode:
 
