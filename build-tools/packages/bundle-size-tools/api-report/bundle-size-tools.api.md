@@ -10,7 +10,6 @@ import type { Build } from 'azure-devops-node-api/interfaces/BuildInterfaces';
 import type { BundleAnalyzerPlugin } from 'webpack-bundle-analyzer';
 import type JSZip from 'jszip';
 import { WebApi } from 'azure-devops-node-api';
-import type Webpack from 'webpack';
 
 // @public (undocumented)
 export class ADOSizeComparator {
@@ -18,30 +17,8 @@ export class ADOSizeComparator {
     adoConstants: IADOConstants,
     adoConnection: WebApi,
     localReportPath: string,
-    targetBranch: string,
-    adoBuildId: number | undefined,
-    getFallbackCommit?: ((startingCommit: string) => Generator<string>) | undefined);
-    getSizeComparison(tagWaiting: boolean): Promise<SizeComparison>;
-    static naiveFallbackCommitGenerator(startingCommit: string): Generator<string>;
-}
-
-// @public (undocumented)
-export interface BannedModule {
-    moduleName: string;
-    reason: string;
-}
-
-// @public
-export class BannedModulesPlugin {
-    constructor(options: BannedModulesPluginOptions);
-    // (undocumented)
-    apply(compiler: Webpack.Compiler): void;
-}
-
-// @public (undocumented)
-export interface BannedModulesPluginOptions {
-    // (undocumented)
-    bannedModules: BannedModule[];
+    targetBranch: string);
+    getSizeComparison(): Promise<SizeComparison>;
 }
 
 // @public
@@ -125,9 +102,6 @@ export interface GetBuildOptions {
 export function getBuilds(adoConnection: WebApi, options: GetBuildOptions): Promise<Build[]>;
 
 // @public
-export function getBuildTagForCommit(commitHash: string): string;
-
-// @public
 export function getBundleSummariesFromAnalyzer(args: GetBundleSummariesFromAnalyzerArgs): Promise<BundleSummaries>;
 
 // @public (undocumented)
@@ -137,9 +111,6 @@ export interface GetBundleSummariesFromAnalyzerArgs {
     // (undocumented)
     getAnalyzerJson: (relativePath: string) => Promise<BundleAnalyzerPlugin.JsonReport>;
 }
-
-// @public (undocumented)
-export function getPriorCommit(baseCommit: string): string;
 
 // @public
 export function getZipObjectFromArtifact(adoConnection: WebApi, projectName: string, buildNumber: number, artifactName: string): Promise<JSZip>;
@@ -155,11 +126,7 @@ export interface IADOConstants {
     // (undocumented)
     orgUrl: string;
     // (undocumented)
-    prBuildDefinitionId?: number;
-    // (undocumented)
     projectName: string;
-    // (undocumented)
-    projectRepoGuid?: string;
 }
 
 // @public

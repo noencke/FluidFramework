@@ -13,7 +13,6 @@ export {
 	getAnalyzerPathsFromFileSystem,
 	getAnalyzerPathsFromZipObject,
 	getAzureDevopsApi,
-	getBuildTagForCommit,
 	getBundleSummariesFromAnalyzer,
 	getZipObjectFromArtifact,
 	IADOConstants,
@@ -25,17 +24,11 @@ export {
 	BundleMetricSet,
 	BundleSummaries,
 } from "./BundleBuddyTypes";
-export {
-	BannedModule,
-	BannedModulesPlugin,
-	BannedModulesPluginOptions,
-} from "./bannedModulesPlugin/bannedModulesPlugin";
 export { bundlesContainNoChanges, compareBundles } from "./compareBundles";
 export {
 	GetBuildOptions,
 	getAllFilesInDirectory,
 	getBaselineCommit,
 	getBuilds,
-	getPriorCommit,
 	unzipStream,
 } from "./utilities";
