@@ -7,7 +7,7 @@ For example, a typical application which merely renders some shared, mutable sta
 
 * Collaboration where every user converges to the same document state, even in the face of concurrent edits
 * Durable storage that supports sharing, permissions, and version restore
-* Centralized search, audit, and eDiscovery to satisfy enterprise compliance
+* Centralized search, audit logs, eDiscovery, retention/legal hold, and service-level compliance controls
 * Schema evolution that lets new app features ship without breaking older clients still in the wild
 * Identity preservation of data so that references, attribution, and concurrent edits survive when content changes/moves
 * Atomic transactions to maintain document data invariants when writing
@@ -25,7 +25,7 @@ Modern competitive applications also demand:
 The **Fluid Framework addresses every one of these hurdles in one tidy package**.
 _And it even has an ecosystem-friendly and developer-friendly API._
 
-Fluid has robust client and service implementations, powered by Azure.
+Fluid has a mature client library and a robust service implementation, powered by SharePoint Embedded and easily hostable on Azure.
 Put simply, if you want to build a document-based enterprise app in the Microsoft ecosystem, Fluid is the defacto option.
 
 ## How is this possible?
@@ -46,11 +46,15 @@ But these decentralized systems suffer from various drawbacks which are typicall
 * No total ordering of edits, therefore only commutative edits are possible
 * No agreed serialization point, so ACID transactions and global invariants/constraints are essentially impossible to enforce
 * Every peer eventually pays the full bandwidth and storage cost of every change ever made
-* No central authority to enforce schema, index data for search/discovery, control access, or collect garbage
+* No trusted service layer to index data for search/discovery, control access, or collect garbage; schema enforcement must be coordinated by every client
 
 Fluid both reaps the rewards and dodges the downsides by introducing a centralized service - but one that is extremely minimal.
 Its primary duty is to provide a total ordering to edits - a trivially simple duty in both complexity and service COGS.
 A total-ordering service is used by other "operational transform"-style architectures (e.g. Google Docs), but Fluid goes the extra mile to **do everything possible on the client, not the service.**
+
+That service boundary matters: some features are not just clever client-library capabilities.
+Enterprise search, audit/eDiscovery, retention/legal hold, durable permissions, and blob lifetime management categorically require a trusted central service that can own, index, govern, and audit the data.
+If a framework does not provide that service, the application must provide or integrate one before those features can exist.
 
 ## But Does My Application Need Collaboration at All?
 
@@ -104,14 +108,14 @@ Like any SharePoint file, these **files can be shared, permissioned, and rolled 
 
 | Framework | Support | Notes |
 | --- | :-: | --- |
-| Yjs |   | Binary blobs via `y-indexeddb`/`y-leveldb`/`y-redis` providers; no file/permission/rollback model. |
-| Collabs |   | Browser storage providers and a WS server; no managed file abstraction or permissioning. |
-| Automerge | ○ | `automerge-repo` storage adapters persist binary docs with full history; `view(heads)`/`fork()` enable time-travel and rollback semantics, but no file/permission model. |
+| Yjs |   | Library/protocol only; persistence depends on providers such as IndexedDB/LevelDB/Redis/Hocuspocus, so file sharing, permissions, and rollback require a separate service. |
+| Collabs |   | Library plus WS server; no managed central document service for file sharing, permissions, or rollback. |
+| Automerge | ○ | No managed document service; storage adapters persist binary docs with history and support time-travel/forking, but file sharing, permissions, and rollback are app/service responsibilities. |
 | Yorkie | ○ | Named revisions + `restoreRevision()` provide document-level rollback; Auth Webhook covers permissioning, but no file-as-document abstraction. |
 | Firebase | ○ | Document-level Security Rules + PITR (≤ 7 days) + scheduled backups; rollback granularity is project-wide, not per-document. |
 | Liveblocks |   | Persistent rooms with access controls, but no rollback. |
 | Convex | ○ | Documents in tables with scheduled backups + point-in-time backup snapshots; permissions are app-implemented, no per-document rollback. |
-| Loro |   | Library-only; `checkout(version)` enables time-travel but no file/permission model. |
+| Loro |   | Library-only; `checkout(version)` enables time-travel, but file sharing, permissions, and rollback require a separate service. |
 | Jazz | ○ | Row-level security + per-row git-like history with soft/hard delete enable rollback; no file-as-document model. |
 
 ### Compaction + Coordination
@@ -123,14 +127,14 @@ Therefore, **service storage _and_ compute costs remain radically low without an
 
 | Framework | Support | Notes |
 | --- | :-: | --- |
-| Yjs | ○ | `Y.encodeStateAsUpdate` + `mergeUpdates` compress to a merged form and `doc.gc` reclaims deleted text, but structural CRDT metadata and tombstones still accumulate with edit history; not a true snapshot, and no service-coordinated lifecycle. |
-| Collabs |   | No managed compaction coordination. |
-| Automerge |   | `automerge-repo` exposes compaction hooks, but no managed snapshot lifecycle. |
+| Yjs | ○ | No managed service to coordinate lifecycle; `Y.encodeStateAsUpdate` + `mergeUpdates` and `doc.gc` reduce stored state, but CRDT metadata/tombstones still accumulate and no canonical snapshot lifecycle exists. |
+| Collabs |   | Library-only; no central service to coordinate compaction lifecycle. |
+| Automerge |   | No managed service to coordinate compaction; `automerge-repo` exposes hooks, but lifecycle is app/operator responsibility. |
 | Yorkie |   | Server-side compaction shrinks storage but keeps compute on the server. |
 | Firebase |   | No delta log to compact. |
 | Liveblocks |   | v2 storage engine compacts opaquely server-side; no client-driven snapshots. |
 | Convex |   | No delta log to compact. |
-| Loro | ○ | `shallow_snapshot()` truncates pre-cutoff history (~70–90% smaller), but the snapshot still encodes per-op CRDT metadata and post-snapshot edits accumulate normally; not a true snapshot, and no service-coordinated lifecycle. |
+| Loro | ○ | Library-only; `shallow_snapshot()` truncates pre-cutoff history (~70–90% smaller), but snapshots still encode per-op CRDT metadata and no service-coordinated lifecycle exists. |
 | Jazz |   | Snapshot DAG maintained server-side. |
 
 ### Blob storage + Lifetime Management
@@ -141,32 +145,33 @@ This is critical for document longevity and extremely difficult to implement fro
 
 | Framework | Support | Notes |
 | --- | :-: | --- |
-| Yjs |   | No native blob storage or reference workflow. |
-| Collabs |   | No native blob storage. |
-| Automerge |   | No blob-by-reference primitive; binary data stored inline. |
+| Yjs |   | Library/protocol only; no central document service to own blob references or garbage collect external files. |
+| Collabs |   | Library-only; no central document service for blob storage or lifetime management. |
+| Automerge |   | No managed document service for blob references/lifetime management; binary data is app-managed or stored inline. |
 | Yorkie |   | No native blob attachments. |
 | Firebase | ○ | Cloud Storage holds blobs referenced by URL with Security Rules, but no automatic GC of unreferenced files. |
 | Liveblocks |   | No blob-by-reference primitives in native Storage. |
 | Convex | ○ | File Storage uploads referenced by `_id` with metadata, but no automatic GC when references are removed. |
-| Loro |   | External storage required; no native blob references. |
+| Loro |   | Library-only; external blob storage and garbage collection must be provided separately. |
 | Jazz | ○ | `createFileFromBlob()`/`createFileFromStream()` chunked file storage by reference; no automatic GC of orphaned blobs. |
 
 ### Compliance
 
 The SharePoint service ensures the application's data remains compliant with enterprise requirements.
-**All data is centrally searchable/auditable and works with eDiscovery out of the box.**
+Because Fluid documents are SharePoint/OneDrive files, they inherit a broad Microsoft 365 compliance surface: central content search, audit logs, eDiscovery, retention/legal hold, encryption, access controls, and relevant service compliance programs such as SOC 2 Type II and HIPAA.
+**The important distinction is service ownership: these controls require a trusted central service that can index, govern, and audit the data.**
 
 | Framework | Support | Notes |
 | --- | :-: | --- |
-| Yjs |   | Opaque binary state; no search/audit/eDiscovery. |
-| Collabs |   | Opaque persisted state; no compliance features. |
-| Automerge |   | Binary docs are not indexed; no audit/eDiscovery. |
-| Yorkie |   | Opaque MongoDB-backed state; no eDiscovery integration. |
-| Firebase | ○ | Cloud Audit Logs trace data access; Firestore queries support indexed lookups, but no full-text search or eDiscovery. |
-| Liveblocks | ○ | SOC 2 Type II + HIPAA compliance with audit trail and encryption at rest/transit; no content-search or eDiscovery primitives. |
-| Convex | ○ | First-class full-text + vector search; no audit logs or eDiscovery primitives. |
-| Loro |   | Library-only; no service-side audit/eDiscovery. |
-| Jazz |   | Row-level security only; no audit/search/eDiscovery. |
+| Yjs |   | Library/protocol only; no managed central service to index, audit, retain, or produce content for eDiscovery. Providers such as Hocuspocus would need to add those controls. |
+| Collabs |   | Library-only; no managed service to provide search, audit logs, retention, or eDiscovery. |
+| Automerge |   | No managed central service to index or govern documents; search, audit logs, retention, and eDiscovery require app/service integration. |
+| Yorkie |   | Centralized sync service, but no enterprise content search, audit-log, retention/legal-hold, or eDiscovery integration. |
+| Firebase | ○ | Managed service with Cloud Audit Logs and indexed queries, but no document content search, legal-hold/eDiscovery workflow, or Microsoft 365-style file governance. |
+| Liveblocks | ○ | Managed service with SOC 2 Type II + HIPAA compliance, audit trail, and encryption at rest/transit; no content search, retention/legal hold, or eDiscovery primitives. |
+| Convex | ○ | Managed service with first-class full-text + vector search; no audit-log, retention/legal-hold, or eDiscovery primitives. |
+| Loro |   | Library-only; no managed service to provide search, audit logs, retention, or eDiscovery. |
+| Jazz |   | Central sync/storage service with row-level security/history, but no enterprise search, audit-log, retention/legal-hold, or eDiscovery controls. |
 
 ### Data Migration
 
