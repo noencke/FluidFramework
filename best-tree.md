@@ -1,4 +1,4 @@
-# Fluid Framework Makes it Easy
+# Fluid Framework Makes It Easy
 
 Building applications is hard.
 Building enterprise applications where data is shared between multiple users and is subject to performance, durability, cost, and compliance requirements is even harder.
@@ -7,7 +7,7 @@ For example, a typical application which merely renders some shared, mutable sta
 
 * Collaboration where every user converges to the same document state, even in the face of concurrent edits
 * Durable storage that supports sharing, permissions, and version restore
-* Centralized search, audit logs, eDiscovery, retention/legal hold, and service-level compliance controls
+* Centralized search, audit logs, eDiscovery, retention/legal hold and service-level compliance controls
 * Schema evolution that lets new app features ship without breaking older clients still in the wild
 * Identity preservation of data so that references, attribution, and concurrent edits survive when content changes/moves
 * Atomic transactions to maintain document data invariants when writing
@@ -26,14 +26,14 @@ The **Fluid Framework addresses every one of these hurdles in one tidy package**
 _And it even has an ecosystem-friendly and developer-friendly API._
 
 Fluid has a mature client library and a robust service implementation, powered by SharePoint Embedded and easily hostable on Azure.
-Put simply, if you want to build a document-based enterprise app in the Microsoft ecosystem, Fluid is the defacto option.
+Put simply, if you want to build a document-based enterprise app in the Microsoft ecosystem, Fluid is the de facto option.
 
 ## How is this possible?
 
 Fluid's state-of-the-art hybrid OT and CRDT-inspired architecture efficiently manages the full stack of the application, from server to client.
 It provides durable persistence, real-time collaborative editing and conflict-free concurrency via a hyper-friendly query model while still remaining cheap, fast, simple and enterprise-compliant.
 
-Fluid's architecture takes inspiration from decentralized architectures - like serverless, P2P CRDTs for example.
+Fluid's architecture takes inspiration from decentralized architectures - for example, serverless peer-to-peer CRDTs.
 CRDTs are excellent at:
 
 * Merging concurrent edits without coordination
@@ -43,7 +43,7 @@ CRDTs are excellent at:
 
 But these decentralized systems suffer from various drawbacks which are typically non-starters for enterprise applications:
 
-* No total ordering of edits, therefore only "commutative" edits are possible (this severely restricts the kind of edits a system can support)
+* No total ordering of edits - therefore, only "commutative" edits are possible (this severely restricts the kinds of edits a system can support)
 * No agreed serialization point, so ACID transactions and global invariants/constraints are impossible to enforce
 * Every peer eventually pays the full bandwidth and storage cost of every change ever made
 * No trusted service layer to index data for search/discovery, control access, or collect garbage
@@ -74,7 +74,7 @@ Most modern applications will have all or most of these needs.
 ## Fluid Features
 
 **There are no other software packages available that do as much for as little cost.**
-Below, this document highlights some of Fluid's most high-value features and note their equivalent support (or lack thereof) in various frameworks tackling a similar problem space.
+Below, this document highlights some of Fluid's most high-value features and notes their equivalent support (or lack thereof) in various frameworks tackling a similar problem space.
 
 | Icon | Meaning |
 | :-: | --- |
@@ -216,7 +216,7 @@ Specialized features of Fluid, like Branching and Moves, are given intuitive API
 
 ### Branching
 
-Fluid can create **version-control-style local branches that allow edits to be applied and rebased in isolation before being merged** in later.
+Fluid can create **version-control-style local branches that allow edits to be applied and rebased in isolation before being merged** in.
 _Branches are essential for staging edits performed by agentic AI before final approval by a human-in-the-loop._
 
 | Framework | Support | Notes |
@@ -251,7 +251,7 @@ Even **when data moves from one part of the document to another, clients will ef
 ### Presence
 
 **Fluid natively provides lightweight network side channels for transient data that doesn't need to be persisted, like presence signals.**
-Like everything else, this capability is provided as a first-class friendly API and makes it easy for applications to broadcast messages that don't belong in the document itself.
+Like everything else, this capability is provided as a first-class API and makes it easy for applications to broadcast messages that don't belong in the document itself.
 
 | Framework | Support | Notes |
 | --- | :-: | --- |
