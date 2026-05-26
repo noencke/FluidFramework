@@ -43,18 +43,18 @@ CRDTs are excellent at:
 
 But these decentralized systems suffer from various drawbacks which are typically non-starters for enterprise applications:
 
-* No total ordering of edits, therefore only commutative edits are possible
-* No agreed serialization point, so ACID transactions and global invariants/constraints are essentially impossible to enforce
+* No total ordering of edits, therefore only "commutative" edits are possible (this severely restricts the kind of edits a system can support)
+* No agreed serialization point, so ACID transactions and global invariants/constraints are impossible to enforce
 * Every peer eventually pays the full bandwidth and storage cost of every change ever made
-* No trusted service layer to index data for search/discovery, control access, or collect garbage; schema enforcement must be coordinated by every client
+* No trusted service layer to index data for search/discovery, control access, or collect garbage
 
-Fluid both reaps the rewards and dodges the downsides by introducing a centralized service - but one that is extremely minimal.
-Its primary duty is to provide a total ordering to edits - a trivially simple duty in both complexity and service COGS.
+Inspired by CRDTs, but not bound to a strict CRDT architecture, Fluid takes a hybrid approach.
+It reaps the rewards and dodges the downsides by introducing a centralized service - but one that is extremely minimal.
+The service's primary duty is to provide a total ordering to edits - a trivially simple duty in both complexity and service COGS.
 A total-ordering service is used by other "operational transform"-style architectures (e.g. Google Docs), but Fluid goes the extra mile to **do everything possible on the client, not the service.**
-
-That service boundary matters: some features are not just clever client-library capabilities.
-Enterprise search, audit/eDiscovery, retention/legal hold, durable permissions, and blob lifetime management categorically require a trusted central service that can own, index, govern, and audit the data.
-If a framework does not provide that service, the application must provide or integrate one before those features can exist.
+The centralized service provides capabilities that _only_ a centralized service can provide - for example, enterprise search/audit/eDiscovery/legal retention/permissions and automatic garbage collection of document assets.
+But beyond that, anything that _can_ be delegated to the clients _is_ delegated to the clients.
+That keeps service COGS minimal.
 
 ## But Does My Application Need Collaboration at All?
 
