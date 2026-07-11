@@ -243,6 +243,7 @@ export {
 	RevertibleAlphaFactory, 
 	RunTransactionParams, 
 	SchemaFactoryAlpha, 
+	SchemaFactoryAlphaOptions,
 	SchemaStaticsAlpha, 
 	SchemaType, 
 	SharedTreeFormatOptions, 
