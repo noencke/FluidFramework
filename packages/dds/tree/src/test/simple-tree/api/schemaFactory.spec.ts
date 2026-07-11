@@ -53,6 +53,7 @@ import {
 	SchemaFactoryBeta,
 	allowUnused,
 	type InsertableTreeFieldFromImplicitField,
+	checkCompatibility,
 	createTreeSchema,
 	getSimpleSchema,
 	type SchemaFactoryAlphaOptions,
@@ -551,6 +552,21 @@ describe("schemaFactory", () => {
 			);
 			assert(treeObjectSchema?.kind === NodeKind.Object);
 			assert.equal(treeObjectSchema.allowUnknownOptionalFields, true);
+
+			const HistoricalPoint = factory.object("Point", {
+				x: factory.number,
+				y: factory.number,
+			});
+			const CurrentPoint = factory.object("Point", {
+				x: factory.number,
+				y: factory.number,
+				z: factory.optional(factory.number),
+			});
+			const forwardsCompatibilityStatus = checkCompatibility(
+				new TreeViewConfiguration({ schema: CurrentPoint }),
+				new TreeViewConfiguration({ schema: HistoricalPoint }),
+			);
+			assert.equal(forwardsCompatibilityStatus.canView, true);
 		});
 
 		it("Field schema metadata", () => {
