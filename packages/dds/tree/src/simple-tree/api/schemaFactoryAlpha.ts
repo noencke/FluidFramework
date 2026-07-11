@@ -36,9 +36,11 @@ import {
 	mapSchema,
 	type ObjectNodeSchema,
 	type ObjectNodeSchemaWorkaround,
+	type InsertableObjectFromSchemaRecord,
 	objectSchema,
 	type RecordNodeCustomizableSchema,
 	recordSchema,
+	type TreeObjectNode,
 } from "../node-kinds/index.js";
 import type { SchemaType, SimpleObjectNodeSchema } from "../simpleSchema.js";
 import type { SimpleLeafNodeSchema } from "../simpleSchema.js";
@@ -308,6 +310,26 @@ const schemaStaticsAlpha: SchemaStaticsAlpha = {
 };
 
 /**
+ * Options for configuring defaults on {@link SchemaFactoryAlpha}.
+ *
+ * @input
+ * @alpha
+ */
+export interface SchemaFactoryAlphaOptions {
+	/**
+	 * Provides default options for object node schema declarations.
+	 *
+	 * @remarks
+	 * When this returns `undefined`, the originally provided options are used unchanged.
+	 */
+	readonly objectOptionDefaults?: <TCustomMetadata = unknown>(
+		name: number | string,
+		fields: RestrictiveStringRecord<ImplicitFieldSchema>,
+		options: ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined,
+	) => ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined;
+}
+
+/**
  * {@link SchemaFactory} with additional alpha APIs.
  *
  * @alpha
@@ -320,6 +342,75 @@ export class SchemaFactoryAlpha<
 	out TScope extends string | undefined = string | undefined,
 	TName extends number | string = string,
 > extends SchemaFactoryBeta<TScope, TName> {
+	/**
+	 * Construct a SchemaFactoryAlpha with a given {@link SchemaFactory.scope|scope}.
+	 */
+	public constructor(
+		scope: TScope,
+		private readonly options?: SchemaFactoryAlphaOptions,
+	) {
+		super(scope);
+	}
+
+	private getObjectOptions<TCustomMetadata>(
+		name: number | string,
+		fields: RestrictiveStringRecord<ImplicitFieldSchema>,
+		options: ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined,
+	): ObjectSchemaOptionsAlpha<TCustomMetadata> {
+		const objectOptionDefaults = this.options?.objectOptionDefaults;
+		const defaultedOptions =
+			objectOptionDefaults === undefined
+				? options
+				: (objectOptionDefaults<TCustomMetadata>(name, fields, options) ?? options);
+
+		return {
+			...defaultSchemaFactoryObjectOptions,
+			...defaultedOptions,
+		};
+	}
+
+	/**
+	 * Define a {@link TreeNodeSchemaClass} for a {@link TreeObjectNode}.
+	 *
+	 * @param name - Unique identifier for this schema within this factory's scope.
+	 * @param fields - Schema for fields of the object node's schema. Defines what children can be placed under each key.
+	 * @param options - Additional options for the schema.
+	 */
+	public override object<
+		const Name extends TName,
+		const T extends RestrictiveStringRecord<ImplicitFieldSchema>,
+		const TCustomMetadata = unknown,
+	>(
+		name: Name,
+		fields: T,
+		options?: ObjectSchemaOptionsAlpha<TCustomMetadata>,
+	): TreeNodeSchemaClass<
+		ScopedSchemaName<TScope, Name>,
+		NodeKind.Object,
+		TreeObjectNode<T, ScopedSchemaName<TScope, Name>>,
+		object & InsertableObjectFromSchemaRecord<T>,
+		true,
+		T,
+		never,
+		TCustomMetadata
+	> {
+		return objectSchema(
+			scoped<TScope, TName, Name>(this, name),
+			fields,
+			true,
+			this.getObjectOptions(name, fields, options),
+		) as TreeNodeSchemaClass<
+			ScopedSchemaName<TScope, Name>,
+			NodeKind.Object,
+			TreeObjectNode<T, ScopedSchemaName<TScope, Name>>,
+			object & InsertableObjectFromSchemaRecord<T>,
+			true,
+			T,
+			never,
+			TCustomMetadata
+		>;
+	}
+
 	/**
 	 * Define a {@link TreeNodeSchemaClass} for a {@link TreeObjectNode}.
 	 *
@@ -336,10 +427,12 @@ export class SchemaFactoryAlpha<
 		fields: T,
 		options?: ObjectSchemaOptionsAlpha<TCustomMetadata>,
 	): ObjectNodeSchemaWorkaround<ScopedSchemaName<TScope, Name>, T, true, TCustomMetadata> {
-		return objectSchema(scoped<TScope, TName, Name>(this, name), fields, true, {
-			...defaultSchemaFactoryObjectOptions,
-			...options,
-		});
+		return objectSchema(
+			scoped<TScope, TName, Name>(this, name),
+			fields,
+			true,
+			this.getObjectOptions(name, fields, options),
+		);
 	}
 
 	/**
@@ -734,6 +827,6 @@ export class SchemaFactoryAlpha<
 		const T extends TName,
 		TNameInner extends number | string = string,
 	>(name: T): SchemaFactoryAlpha<ScopedSchemaName<TScope, T>, TNameInner> {
-		return new SchemaFactoryAlpha(scoped<TScope, TName, T>(this, name));
+		return new SchemaFactoryAlpha(scoped<TScope, TName, T>(this, name), this.options);
 	}
 }

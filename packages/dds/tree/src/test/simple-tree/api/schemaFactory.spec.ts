@@ -53,6 +53,9 @@ import {
 	SchemaFactoryBeta,
 	allowUnused,
 	type InsertableTreeFieldFromImplicitField,
+	createTreeSchema,
+	getSimpleSchema,
+	type SchemaFactoryAlphaOptions,
 } from "../../../simple-tree/index.js";
 import {
 	brand,
@@ -489,6 +492,65 @@ describe("schemaFactory", () => {
 
 			// This must be checked after the types are checked to avoid it narrowing and making the type checks above not test anything.
 			assert.deepEqual(Foo.metadata, fooMetadata);
+		});
+
+		it("SchemaFactoryAlpha constructor options default object schema options", () => {
+			const defaultFactory = new SchemaFactoryAlpha("default-options");
+			const DefaultObject = defaultFactory.object("DefaultObject", {});
+			const DefaultObjectAlpha = defaultFactory.objectAlpha("DefaultObjectAlpha", {});
+
+			assert.equal((DefaultObject as ObjectNodeSchema).allowUnknownOptionalFields, false);
+			assert.equal(DefaultObjectAlpha.allowUnknownOptionalFields, false);
+
+			const metadataFromDefaults = { description: "metadata from factory defaults" };
+			const persistedMetadataFromDefaults = { defaulted: true };
+			const defaultOptions: SchemaFactoryAlphaOptions = {
+				objectOptionDefaults: (_name, _fields, options) => ({
+					...options,
+					metadata: options?.metadata ?? metadataFromDefaults,
+					persistedMetadata: options?.persistedMetadata ?? persistedMetadataFromDefaults,
+					allowUnknownOptionalFields: options?.allowUnknownOptionalFields ?? true,
+				}),
+			};
+			const factory = new SchemaFactoryAlpha("object-defaults", defaultOptions);
+
+			const FromObject = factory.object("FromObject", {});
+			const FromObjectAlpha = factory.objectAlpha("FromObjectAlpha", {});
+			const FromObjectRecursive = factory.objectRecursive("FromObjectRecursive", {});
+			const FromObjectRecursiveAlpha = factory.objectRecursiveAlpha(
+				"FromObjectRecursiveAlpha",
+				{},
+			);
+			const ExplicitFalse = factory.object(
+				"ExplicitFalse",
+				{},
+				{
+					allowUnknownOptionalFields: false,
+				},
+			);
+
+			assert.equal((FromObject as ObjectNodeSchema).allowUnknownOptionalFields, true);
+			assert.equal(FromObjectAlpha.allowUnknownOptionalFields, true);
+			assert.equal(FromObjectRecursive.allowUnknownOptionalFields, true);
+			assert.equal(FromObjectRecursiveAlpha.allowUnknownOptionalFields, true);
+			assert.equal((ExplicitFalse as ObjectNodeSchema).allowUnknownOptionalFields, false);
+			assert.deepEqual((FromObject as ObjectNodeSchema).metadata, metadataFromDefaults);
+			assert.deepEqual(
+				(FromObject as ObjectNodeSchema).persistedMetadata,
+				persistedMetadataFromDefaults,
+			);
+
+			const simpleObjectSchema = getSimpleSchema(FromObject).definitions.get(
+				"object-defaults.FromObject",
+			);
+			assert(simpleObjectSchema?.kind === NodeKind.Object);
+			assert.equal(simpleObjectSchema.allowUnknownOptionalFields, true);
+
+			const treeObjectSchema = createTreeSchema(FromObjectAlpha).definitions.get(
+				"object-defaults.FromObjectAlpha",
+			);
+			assert(treeObjectSchema?.kind === NodeKind.Object);
+			assert.equal(treeObjectSchema.allowUnknownOptionalFields, true);
 		});
 
 		it("Field schema metadata", () => {
@@ -1410,11 +1472,19 @@ describe("schemaFactory", () => {
 	});
 
 	it("scopedFactoryAlpha", () => {
-		const factory = new SchemaFactoryAlpha("test.blah");
+		const factory = new SchemaFactoryAlpha("test.blah", {
+			objectOptionDefaults: (_name, _fields, options) => ({
+				...options,
+				allowUnknownOptionalFields: options?.allowUnknownOptionalFields ?? true,
+			}),
+		});
 
 		const scopedFactory: SchemaFactoryAlpha<"test.blah.scoped"> =
 			factory.scopedFactoryAlpha("scoped");
 		assert.equal(scopedFactory.scope, "test.blah.scoped");
+		const ScopedObject = scopedFactory.objectAlpha("ScopedObject", {});
+		assert.equal(ScopedObject.identifier, "test.blah.scoped.ScopedObject");
+		assert.equal(ScopedObject.allowUnknownOptionalFields, true);
 		type _check = requireTrue<
 			areSafelyAssignable<typeof scopedFactory.scope, "test.blah.scoped">
 		>;
