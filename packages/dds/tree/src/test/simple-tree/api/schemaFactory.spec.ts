@@ -503,9 +503,12 @@ describe("schemaFactory", () => {
 			assert.equal((DefaultObject as ObjectNodeSchema).allowUnknownOptionalFields, false);
 			assert.equal(DefaultObjectAlpha.allowUnknownOptionalFields, false);
 
-			const metadataFromDefaults = { description: "metadata from factory defaults" };
+			const metadataFromDefaults = {
+				description: "metadata from factory defaults",
+				custom: { fromFactoryDefaults: true },
+			} as const;
 			const persistedMetadataFromDefaults = { defaulted: true };
-			const defaultOptions: SchemaFactoryAlphaOptions = {
+			const defaultOptions: SchemaFactoryAlphaOptions<typeof metadataFromDefaults.custom> = {
 				objectOptionDefaults: (_name, _fields, options) => ({
 					...options,
 					metadata: options?.metadata ?? metadataFromDefaults,
@@ -529,6 +532,16 @@ describe("schemaFactory", () => {
 					allowUnknownOptionalFields: false,
 				},
 			);
+			const perObjectMetadata = {
+				custom: { perObjectMetadata: "still inferred" },
+			} as const;
+			const PerObjectMetadata = factory.object(
+				"PerObjectMetadata",
+				{},
+				{
+					metadata: perObjectMetadata,
+				},
+			);
 
 			assert.equal((FromObject as ObjectNodeSchema).allowUnknownOptionalFields, true);
 			assert.equal(FromObjectAlpha.allowUnknownOptionalFields, true);
@@ -540,6 +553,25 @@ describe("schemaFactory", () => {
 				(FromObject as ObjectNodeSchema).persistedMetadata,
 				persistedMetadataFromDefaults,
 			);
+			const customFromDefaults = FromObject.metadata.custom;
+			type _check1 = requireTrue<
+				areSafelyAssignable<
+					typeof customFromDefaults,
+					{ readonly fromFactoryDefaults: true } | undefined
+				>
+			>;
+			assert(customFromDefaults !== undefined);
+			const fromFactoryDefaults = customFromDefaults.fromFactoryDefaults;
+			type _check2 = requireTrue<areSafelyAssignable<typeof fromFactoryDefaults, true>>;
+
+			const perObjectCustom = PerObjectMetadata.metadata.custom;
+			type _check3 = requireTrue<
+				areSafelyAssignable<
+					typeof perObjectCustom,
+					{ readonly perObjectMetadata: "still inferred" } | undefined
+				>
+			>;
+			assert.deepEqual(PerObjectMetadata.metadata, perObjectMetadata);
 
 			const simpleObjectSchema = getSimpleSchema(FromObject).definitions.get(
 				"object-defaults.FromObject",
