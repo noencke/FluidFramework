@@ -314,25 +314,19 @@ const schemaStaticsAlpha: SchemaStaticsAlpha = {
  *
  * @input
  * @alpha
- * @typeParam TObjectOptionDefaultCustomMetadata - Custom metadata type supplied by object-option defaults.
  */
-export interface SchemaFactoryAlphaOptions<TObjectOptionDefaultCustomMetadata = unknown> {
+export interface SchemaFactoryAlphaOptions {
 	/**
 	 * Provides default options for object node schema declarations.
 	 *
 	 * @remarks
 	 * When this returns `undefined`, the originally provided options are used unchanged.
-	 * If this hook supplies typed custom metadata, specify `TObjectOptionDefaultCustomMetadata`
-	 * on either this options bag or {@link SchemaFactoryAlpha} so schemas declared without
-	 * per-object options expose that custom metadata type.
 	 */
-	readonly objectOptionDefaults?: <TCustomMetadata = TObjectOptionDefaultCustomMetadata>(
+	readonly objectOptionDefaults?: <TCustomMetadata = unknown>(
 		name: number | string,
 		fields: RestrictiveStringRecord<ImplicitFieldSchema>,
 		options: ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined,
-	) =>
-		| ObjectSchemaOptionsAlpha<TCustomMetadata | TObjectOptionDefaultCustomMetadata>
-		| undefined;
+	) => ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined;
 }
 
 /**
@@ -340,22 +334,20 @@ export interface SchemaFactoryAlphaOptions<TObjectOptionDefaultCustomMetadata = 
  *
  * @alpha
  * @privateRemarks
- * When building schema, when `options` is not provided and no factory object-option default metadata type is configured,
- * `TCustomMetadata` is inferred as `unknown`.
+ * When building schema, when `options` is not provided, `TCustomMetadata` is inferred as `unknown`.
  * If desired, this could be made to infer `undefined` instead by adding overloads for everything,
  * but currently it is not worth the maintenance overhead as there is no use case which this is known to be helpful for.
  */
 export class SchemaFactoryAlpha<
 	out TScope extends string | undefined = string | undefined,
 	TName extends number | string = string,
-	TObjectOptionDefaultCustomMetadata = unknown,
 > extends SchemaFactoryBeta<TScope, TName> {
 	/**
 	 * Construct a SchemaFactoryAlpha with a given {@link SchemaFactory.scope|scope}.
 	 */
 	public constructor(
 		scope: TScope,
-		private readonly options?: SchemaFactoryAlphaOptions<TObjectOptionDefaultCustomMetadata>,
+		private readonly options?: SchemaFactoryAlphaOptions,
 	) {
 		super(scope);
 	}
@@ -366,9 +358,7 @@ export class SchemaFactoryAlpha<
 		options: ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined,
 	): ObjectSchemaOptionsAlpha<TCustomMetadata> {
 		const objectOptionDefaults = this.options?.objectOptionDefaults;
-		const defaultedOptions:
-			| ObjectSchemaOptionsAlpha<TCustomMetadata | TObjectOptionDefaultCustomMetadata>
-			| undefined =
+		const defaultedOptions: ObjectSchemaOptionsAlpha<TCustomMetadata> | undefined =
 			objectOptionDefaults === undefined
 				? options
 				: (objectOptionDefaults<TCustomMetadata>(name, fields, options) ?? options);
@@ -377,7 +367,7 @@ export class SchemaFactoryAlpha<
 			...defaultSchemaFactoryObjectOptions,
 			...defaultedOptions,
 		};
-		return mergedOptions as ObjectSchemaOptionsAlpha<TCustomMetadata>;
+		return mergedOptions;
 	}
 
 	/**
@@ -390,7 +380,7 @@ export class SchemaFactoryAlpha<
 	public override object<
 		const Name extends TName,
 		const T extends RestrictiveStringRecord<ImplicitFieldSchema>,
-		const TCustomMetadata = TObjectOptionDefaultCustomMetadata,
+		const TCustomMetadata = unknown,
 	>(
 		name: Name,
 		fields: T,
@@ -432,7 +422,7 @@ export class SchemaFactoryAlpha<
 	public objectAlpha<
 		const Name extends TName,
 		const T extends RestrictiveStringRecord<ImplicitFieldSchema>,
-		const TCustomMetadata = TObjectOptionDefaultCustomMetadata,
+		const TCustomMetadata = unknown,
 	>(
 		name: Name,
 		fields: T,
@@ -452,7 +442,7 @@ export class SchemaFactoryAlpha<
 	public override objectRecursive<
 		const Name extends TName,
 		const T extends RestrictiveStringRecord<System_Unsafe.ImplicitFieldSchemaUnsafe>,
-		const TCustomMetadata = TObjectOptionDefaultCustomMetadata,
+		const TCustomMetadata = unknown,
 	>(
 		name: Name,
 		t: T,
@@ -512,7 +502,7 @@ export class SchemaFactoryAlpha<
 	public objectRecursiveAlpha<
 		const Name extends TName,
 		const T extends RestrictiveStringRecord<System_Unsafe.ImplicitFieldSchemaUnsafe>,
-		const TCustomMetadata = TObjectOptionDefaultCustomMetadata,
+		const TCustomMetadata = unknown,
 	>(
 		name: Name,
 		t: T,
@@ -837,13 +827,7 @@ export class SchemaFactoryAlpha<
 	public scopedFactoryAlpha<
 		const T extends TName,
 		TNameInner extends number | string = string,
-	>(
-		name: T,
-	): SchemaFactoryAlpha<
-		ScopedSchemaName<TScope, T>,
-		TNameInner,
-		TObjectOptionDefaultCustomMetadata
-	> {
+	>(name: T): SchemaFactoryAlpha<ScopedSchemaName<TScope, T>, TNameInner> {
 		return new SchemaFactoryAlpha(scoped<TScope, TName, T>(this, name), this.options);
 	}
 }
