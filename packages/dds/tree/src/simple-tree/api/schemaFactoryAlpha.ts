@@ -80,6 +80,8 @@ import type {
  * Values should be preferred over generator functions when possible, as they are simpler and more efficient.
  * Generator functions should be used when the default value needs to be dynamic or when it is not possible to provide a value directly.
  *
+ * See {@link SchemaStaticsAlpha.withDefault} for the primary API that uses this type.
+ *
  * @example
  * ```typescript
  * // Provide a value directly
@@ -102,27 +104,63 @@ export type NodeProvider<T> = T | (() => T);
  */
 export interface SchemaStaticsAlpha {
 	/**
-	 * Creates a field schema with a default value. Fields with defaults (whether required or optional) are recognized by the type system as optional in constructors,
-	 * allowing them to be omitted when creating new nodes.
+	 * Creates a field schema with a default value.
+	 *
+	 * @remarks
+	 * Fields with defaults are optional in constructors, allowing them to be omitted when creating new nodes.
+	 * This works with both {@link SchemaStatics.required | required} and {@link SchemaStatics.optional | optional} fields:
+	 *
+	 * - **Required fields with defaults**: The field is always present in the tree, but can be omitted from the constructor.
+	 * The default value is used when the field is not provided.
+	 *
+	 * - **Optional fields with defaults**: Optional fields already default to `undefined`, but `withDefault` lets you
+	 * specify a different default value.
+	 *
+	 * The default value can be provided in two ways (see {@link NodeProvider}):
+	 *
+	 * 1. **A value**: The value is deep-copied for each use, ensuring independence between instances.
+	 * Prefer this when the default is a fixed value.
+	 *
+	 * 2. **A generator function**: A function called each time a default is needed. Use this for dynamic defaults
+	 * (e.g., timestamps, UUIDs) or when explicit control over value creation is required.
+	 *
+	 * Defaults are evaluated eagerly during node construction.
+	 *
+	 * For recursive schemas, use {@link SchemaStaticsAlpha.withDefaultRecursive} instead.
+	 *
+	 * See the {@link https://fluidframework.com/docs/data-structures/tree/schema-definition/default-field-values | Default Field Values documentation}
+	 * for a comprehensive guide with additional examples.
 	 *
 	 * @param fieldSchema - The field schema to add a default to (e.g., `factory.required(factory.string)` or `factory.optional(factory.number)`)
 	 * @param defaultValue - A {@link NodeProvider} specifying the default value.
 	 *
 	 * @example
+	 * A schema with a mix of required, defaulted, and dynamic fields:
 	 * ```typescript
-	 * const MySchema = factory.objectAlpha("MyObject", {
-	 *     // Provide values directly
-	 *     name: factory.withDefault(factory.required(factory.string), "untitled"),
-	 *     count: factory.withDefault(factory.required(factory.number), 0),
-	 *     metadata: factory.withDefault(factory.optional(Metadata), new Metadata({ version: 1 })),
+	 * const factory = new SchemaFactoryAlpha("example");
 	 *
-	 *     // Use generator functions for dynamic values
-	 *     timestamp: factory.withDefault(factory.required(factory.number), () => Date.now()),
-	 *     id: factory.withDefault(factory.required(factory.string), () => crypto.randomUUID()),
-	 * });
+	 * class Task extends factory.objectAlpha("Task", {
+	 *     // No default — must always be provided in the constructor
+	 *     title: factory.required(factory.string),
 	 *
-	 * const obj1 = new MySchema({}); // All defaults applied
-	 * const obj2 = new MySchema({ name: "custom" }); // name="custom", other defaults applied
+	 *     // Required field with a static default
+	 *     status: factory.withDefault(factory.required(factory.string), "todo"),
+	 *
+	 *     // Optional field with a custom default (instead of `undefined`)
+	 *     priority: factory.withDefault(factory.optional(factory.number), 0),
+	 *
+	 *     // Dynamic default using a generator function
+	 *     createdAt: factory.withDefault(factory.required(factory.number), () => Date.now()),
+	 * }) {}
+	 *
+	 * // Only `title` is required in the constructor; the rest use their defaults
+	 * const task = new Task({ title: "Write docs" });
+	 * // task.status === "todo"
+	 * // task.priority === 0
+	 * // task.createdAt is set to the current timestamp
+	 *
+	 * // Defaults can be overridden by providing explicit values
+	 * const urgentTask = new Task({ title: "Fix bug", status: "in-progress", priority: 1 });
 	 * ```
 	 *
 	 * @privateRemarks
@@ -171,7 +209,7 @@ export interface SchemaStaticsAlpha {
 		t: T,
 		props?: Omit<
 			FieldPropsAlpha<TCustomMetadata>,
-			"defaultProvider" | "stagedOptionalUpgrade"
+			"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
 		>,
 	) => FieldSchemaAlpha<
 		FieldKind.Optional,
@@ -193,7 +231,96 @@ export interface SchemaStaticsAlpha {
 		t: T,
 		props?: Omit<
 			FieldPropsAlpha<TCustomMetadata>,
-			"defaultProvider" | "stagedOptionalUpgrade"
+			"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
+		>,
+	) => FieldSchemaAlphaUnsafe<
+		FieldKind.Optional,
+		T,
+		TCustomMetadata,
+		FieldPropsAlpha<TCustomMetadata>
+	>;
+
+	/**
+	 * Creates a field schema that is Optional in both the view and the stored schema during the rollout period of an
+	 * optional-to-required field migration, and which becomes Required in the stored schema once the migration is
+	 * explicitly enabled.
+	 *
+	 * @remarks
+	 * Use this to incrementally migrate an optional field to required without a coordinated deployment.
+	 * The migration path is:
+	 *
+	 * 1. Start with `sf.optional(T)` — the stored field is Optional and may be empty.
+	 * 2. Deploy `sf.stagedRequired(T)` — the stored schema stays Optional, so clients from step 1 are unaffected and
+	 * documents they created remain viewable. Because such a document may contain a node where the field is empty,
+	 * reading the field can still yield `undefined`, and the field is therefore Optional in the view (and in the
+	 * TypeScript types) during this phase. What this step does change is that a client using this schema will not
+	 * *create* new empty values: constructing a node without a value for the field, assigning or inserting `undefined`,
+	 * and deleting the field are all rejected with a `UsageError`. The same applies to content built from an existing
+	 * tree or its serialized form (`TreeAlpha.importVerbose`, `TreeAlpha.importCompressed`, `TreeAlpha.create`,
+	 * `TreeBeta.clone` and `TreeView.initialize`): importing or cloning content in which the field is empty throws a
+	 * `UsageError` rather than silently reintroducing an empty value.
+	 * 3. Once clients from step 1 are extinct, explicitly enable the returned staged upgrade so the stored field kind is
+	 * tightened from Optional to Required. This is done by configuring the view with a
+	 * {@link (StagedSchemaUpgradePolicy:interface)} whose
+	 * {@link (StagedSchemaUpgradePolicy:interface).includeStagedRequired} returns `true`
+	 * for this field's upgrade (for example {@link StagedSchemaUpgradePolicyFactory.enabledStagedUpgrades}) and then calling
+	 * {@link TreeView.upgradeSchema}. Without that explicit opt-in, {@link TreeView.upgradeSchema} leaves this staged
+	 * change as a no-op. ({@link extractPersistedSchema} exposes the same opt-in via its `includeStaged` parameter,
+	 * but that only dumps a schema snapshot for inspection: it does not upgrade a document.)
+	 * Unlike every other schema upgrade, this one *narrows* the stored schema, so the application must ensure the
+	 * precondition holds: {@link TreeView.upgradeSchema} does not scan the document, and tightening a document which
+	 * still has the field empty will leave that document out of schema.
+	 * 4. Deploy `sf.required(T)` and drop the staged marker. Only at this point does the field become non-optional in
+	 * the TypeScript types.
+	 *
+	 * This mirrors {@link SchemaStaticsAlpha.stagedOptional} (and {@link SchemaStaticsBeta.staged} for allowed types):
+	 * during the staged phase the view schema describes the *looser* of the two states, which is the only shape that
+	 * honestly describes every document the client may open, while the runtime prevents writes that would move the
+	 * document away from the target state.
+	 *
+	 * @privateRemarks
+	 * Operational precondition: step 3 assumes clients from step 1 have been phased out.
+	 * A `stagedRequired` client itself refuses to clear the field, so the remaining risk is limited to concurrent
+	 * clients from two rollout generations behind (step 1 clients) which can still clear the field.
+	 * This is not a guarantee of safety against arbitrarily old concurrent clients.
+	 *
+	 * @param t - The types allowed under the field.
+	 * @param props - Optional properties to associate with the field.
+	 *
+	 * @typeParam TCustomMetadata - Custom metadata properties to associate with the field.
+	 * See {@link FieldSchemaMetadata.custom}.
+	 */
+	readonly stagedRequired: <
+		const T extends ImplicitAllowedTypes,
+		const TCustomMetadata = unknown,
+	>(
+		t: T,
+		props?: Omit<
+			FieldPropsAlpha<TCustomMetadata>,
+			"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
+		>,
+	) => FieldSchemaAlpha<
+		FieldKind.Optional,
+		T,
+		TCustomMetadata,
+		FieldPropsAlpha<TCustomMetadata>
+	>;
+
+	/**
+	 * {@link SchemaStaticsAlpha.stagedRequired} except tweaked to work better for recursive types.
+	 * Use with {@link ValidateRecursiveSchema} for improved type safety.
+	 * @remarks
+	 * This version of {@link SchemaStaticsAlpha.stagedRequired} has fewer type constraints to work around TypeScript limitations, see {@link Unenforced}.
+	 * See {@link ValidateRecursiveSchema} for additional information about using recursive schema.
+	 */
+	readonly stagedRequiredRecursive: <
+		const T extends System_Unsafe.ImplicitAllowedTypesUnsafe,
+		const TCustomMetadata = unknown,
+	>(
+		t: T,
+		props?: Omit<
+			FieldPropsAlpha<TCustomMetadata>,
+			"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
 		>,
 	) => FieldSchemaAlphaUnsafe<
 		FieldKind.Optional,
@@ -208,6 +335,9 @@ export interface SchemaStaticsAlpha {
 	 * @remarks
 	 * This version of {@link SchemaStaticsAlpha.withDefault} has fewer type constraints to work around TypeScript limitations, see {@link Unenforced}.
 	 * See {@link ValidateRecursiveSchema} for additional information about using recursive schema.
+	 *
+	 * See the {@link https://fluidframework.com/docs/data-structures/tree/schema-definition/default-field-values#recursive-types | Default Field Values — Recursive Types documentation}
+	 * for usage examples and guidance on avoiding infinite recursion with recursive defaults.
 	 */
 	withDefaultRecursive: <
 		Kind extends FieldKind,
@@ -286,7 +416,10 @@ const withDefault = <
 
 const stagedOptional = <const T extends ImplicitAllowedTypes, const TCustomMetadata = unknown>(
 	t: T,
-	props?: Omit<FieldPropsAlpha<TCustomMetadata>, "defaultProvider" | "stagedOptionalUpgrade">,
+	props?: Omit<
+		FieldPropsAlpha<TCustomMetadata>,
+		"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
+	>,
 ): FieldSchemaAlpha<
 	FieldKind.Optional,
 	T,
@@ -296,7 +429,28 @@ const stagedOptional = <const T extends ImplicitAllowedTypes, const TCustomMetad
 	return createFieldSchema(FieldKind.Optional, t, {
 		defaultProvider: getDefaultProvider(() => []),
 		...props,
+		stagedRequiredUpgrade: undefined,
 		stagedOptionalUpgrade: createSchemaUpgrade(),
+	});
+};
+
+const stagedRequired = <const T extends ImplicitAllowedTypes, const TCustomMetadata = unknown>(
+	t: T,
+	props?: Omit<
+		FieldPropsAlpha<TCustomMetadata>,
+		"defaultProvider" | "stagedOptionalUpgrade" | "stagedRequiredUpgrade"
+	>,
+): FieldSchemaAlpha<
+	FieldKind.Optional,
+	T,
+	TCustomMetadata,
+	FieldPropsAlpha<TCustomMetadata>
+> => {
+	return createFieldSchema(FieldKind.Optional, t, {
+		defaultProvider: getDefaultProvider(() => []),
+		...props,
+		stagedOptionalUpgrade: undefined,
+		stagedRequiredUpgrade: createSchemaUpgrade(),
 	});
 };
 
@@ -305,6 +459,8 @@ const schemaStaticsAlpha: SchemaStaticsAlpha = {
 	withDefaultRecursive: withDefault as SchemaStaticsAlpha["withDefaultRecursive"],
 	stagedOptional,
 	stagedOptionalRecursive: stagedOptional as SchemaStaticsAlpha["stagedOptionalRecursive"],
+	stagedRequired,
+	stagedRequiredRecursive: stagedRequired as SchemaStaticsAlpha["stagedRequiredRecursive"],
 };
 
 /**
@@ -542,6 +698,26 @@ export class SchemaFactoryAlpha<
 	 * {@inheritdoc SchemaStaticsAlpha.stagedOptionalRecursive}
 	 */
 	public static readonly stagedOptionalRecursive = schemaStaticsAlpha.stagedOptionalRecursive;
+
+	/**
+	 * {@inheritdoc SchemaStaticsAlpha.stagedRequired}
+	 */
+	public readonly stagedRequired = schemaStaticsAlpha.stagedRequired;
+
+	/**
+	 * {@inheritdoc SchemaStaticsAlpha.stagedRequired}
+	 */
+	public static readonly stagedRequired = schemaStaticsAlpha.stagedRequired;
+
+	/**
+	 * {@inheritdoc SchemaStaticsAlpha.stagedRequiredRecursive}
+	 */
+	public readonly stagedRequiredRecursive = schemaStaticsAlpha.stagedRequiredRecursive;
+
+	/**
+	 * {@inheritdoc SchemaStaticsAlpha.stagedRequiredRecursive}
+	 */
+	public static readonly stagedRequiredRecursive = schemaStaticsAlpha.stagedRequiredRecursive;
 
 	/**
 	 * Define a {@link TreeNodeSchema} for a {@link TreeMapNodeAlpha}.

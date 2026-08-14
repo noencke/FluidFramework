@@ -5,13 +5,14 @@
 
 import { strict as assert } from "node:assert";
 
-import { FluidClientVersion } from "../codec/index.js";
+import { validateAssertionError } from "@fluidframework/test-runtime-utils/internal";
+
 import {
 	type DeltaFieldChanges,
 	type DeltaFieldMap,
 	type DeltaMark,
+	type DeltaVisitor,
 	type DetachedField,
-	DetachedFieldIndex,
 	EmptyKey,
 	type FieldKey,
 	type FieldUpPath,
@@ -26,11 +27,11 @@ import {
 	clonePath,
 	createAnnouncedVisitor,
 	detachedFieldAsKey,
+	makeDetachedFieldIndex,
 	mapCursorField,
 	moveToDetachedField,
 	rootFieldKey,
 } from "../core/index.js";
-import { FormatValidatorBasic } from "../external-utilities/index.js";
 import {
 	cursorForJsonableTreeField,
 	jsonableTreeFromCursor,
@@ -43,12 +44,7 @@ import {
 	stringSchema,
 	toInitialSchema,
 } from "../simple-tree/index.js";
-import {
-	type IdAllocator,
-	type JsonCompatible,
-	brand,
-	idAllocatorFromMaxId,
-} from "../util/index.js";
+import { type JsonCompatible, brand } from "../util/index.js";
 
 import { testGeneralPurposeTreeCursor, testTreeSchema } from "./cursorTestSuite.js";
 import { initializeForest } from "./feature-libraries/index.js";
@@ -60,8 +56,6 @@ import {
 	chunkFromJsonTrees,
 	expectEqualFieldPaths,
 	expectEqualPaths,
-	testIdCompressor,
-	testRevisionTagCodec,
 } from "./utils.js";
 
 /**
@@ -118,12 +112,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 				const forest = factory(schema);
 
-				initializeForest(
-					forest,
-					fieldJsonCursor([data]),
-					testRevisionTagCodec,
-					testIdCompressor,
-				);
+				initializeForest(forest, fieldJsonCursor([data]));
 
 				const reader = forest.allocateCursor();
 				moveToDetachedField(forest, reader);
@@ -138,12 +127,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 	it("cursor use", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const reader = forest.allocateCursor();
 		moveToDetachedField(forest, reader);
@@ -175,7 +159,7 @@ export function testForest(config: ForestTestConfiguration): void {
 	it("isEmpty: rootFieldKey", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 		assert(forest.isEmpty);
-		initializeForest(forest, fieldJsonCursor([[]]), testRevisionTagCodec, testIdCompressor);
+		initializeForest(forest, fieldJsonCursor([[]]));
 		assert(!forest.isEmpty);
 	});
 
@@ -200,12 +184,7 @@ export function testForest(config: ForestTestConfiguration): void {
 	it("tryMoveCursorToNode", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const parentPath: UpPath = {
 			parent: undefined,
@@ -241,12 +220,7 @@ export function testForest(config: ForestTestConfiguration): void {
 	it("tryMoveCursorToField", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const parentPath: FieldUpPath = {
 			parent: undefined,
@@ -283,12 +257,7 @@ export function testForest(config: ForestTestConfiguration): void {
 	describe("moveCursorToPath", () => {
 		it("moves cursor to specified path.", () => {
 			const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([[1, 2]]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 			const cursor = forest.allocateCursor();
 			const path: UpPath = {
@@ -304,12 +273,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 	it("getCursorAboveDetachedFields", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const forestCursor = forest.allocateCursor();
 		moveToDetachedField(forest, forestCursor);
@@ -323,12 +287,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 	it("anchors creation and use", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const cursor = forest.allocateCursor();
 		moveToDetachedField(forest, cursor);
@@ -392,12 +351,7 @@ export function testForest(config: ForestTestConfiguration): void {
 	it("tryMoveCursorToNode with anchor to deleted node returns NotFound", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 
-		initializeForest(
-			forest,
-			fieldJsonCursor([[1, 2]]),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, fieldJsonCursor([[1, 2]]));
 
 		const cursor = forest.allocateCursor();
 		moveToDetachedField(forest, cursor);
@@ -421,19 +375,13 @@ export function testForest(config: ForestTestConfiguration): void {
 	it("can destroy detached fields", () => {
 		const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 		const content: JsonCompatible[] = [1, 2];
-		initializeForest(forest, fieldJsonCursor(content), testRevisionTagCodec, testIdCompressor);
+		initializeForest(forest, fieldJsonCursor(content));
 
 		const mark: DeltaMark = {
 			count: 1,
 			detach: detachId,
 		};
-		const detachedFieldIndex = new DetachedFieldIndex(
-			"test",
-			idAllocatorFromMaxId() as IdAllocator<ForestRootId>,
-			testRevisionTagCodec,
-			testIdCompressor,
-			{ jsonValidator: FormatValidatorBasic, minVersionForCollab: FluidClientVersion.v2_0 },
-		);
+		const detachedFieldIndex = makeDetachedFieldIndex();
 		const delta: DeltaFieldMap = new Map<FieldKey, DeltaFieldChanges>([
 			[rootFieldKey, { marks: [mark] }],
 		]);
@@ -458,6 +406,159 @@ export function testForest(config: ForestTestConfiguration): void {
 		assert.equal(detachedCursor.getFieldLength(), 0);
 	});
 
+	/**
+	 * This suite checks that forests assert on invalid deltas.
+	 *
+	 * Generally asserts like this are not part of the contract we would expect from an interface implementation,
+	 * but malformed deltas and corrupted forests are difficult to triage and have a high risk for persisted data corruption,
+	 * so we make an exception and ensure the validation is consistent.
+	 *
+	 * Among other things this ensures that when swapping forest implementations to try and see if the issue is a bug in the forest,
+	 * we don't get confusing signals due to missing validation.
+	 */
+	describe("rejects invalid deltas", () => {
+		const detachedField: DetachedField = brand("invalidDeltaSource");
+		const detachedKey = detachedFieldAsKey(detachedField);
+
+		function setupForest(): IEditableForest {
+			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
+			initializeForest(forest, fieldJsonCursor([0, 1, 2, 3, 4]));
+			return forest;
+		}
+
+		function afterAssert(forest: IEditableForest, visitor: DeltaVisitor): void {
+			// TODO: After assertion errors, the forest may be in an inconsistent state.
+			// We should require it to be in a "broken" state where reads fail.
+			// This can help guard against invalid forest content getting persisted,
+			// reducing the risk of document corruption.
+			// Freeing the cursor should probably also fail due to the broken state.
+			// This policy is currently not implemented, and will be enabled and enforced in a future change.
+		}
+
+		it("rejects destroying a missing detached field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+
+			assert.throws(
+				() => visitor.destroy(detachedKey, 0),
+				validateAssertionError("Destroyed field must exist"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects creating an occupied detached field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+
+			assert.throws(
+				() => visitor.create([singleJsonCursor(99)], rootFieldKey),
+				validateAssertionError("Create destination must be a new empty field"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects attaching from a missing detached field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.attach(detachedKey, 1, 0),
+				validateAssertionError("Attach source field must exist"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects attaching with a mismatched count", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.create([singleJsonCursor(98), singleJsonCursor(99)], detachedKey);
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.attach(detachedKey, 1, 0),
+				validateAssertionError("Attach must consume all nodes in source field"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects attaching beyond the destination field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.create([singleJsonCursor(99)], detachedKey);
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.attach(detachedKey, 1, 6),
+				validateAssertionError("Attach destination must not exceed field length"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects attaching a detached field into itself", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.attach(rootFieldKey, 5, 0),
+				validateAssertionError("Attach source field must be different from current field"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects detaching beyond the source field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.detach({ start: 4, end: 6 }, detachedKey, detachId, false),
+				validateAssertionError("Detach range must not exceed field length"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects detaching into the source field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.detach({ start: 1, end: 2 }, rootFieldKey, detachId, false),
+				validateAssertionError(
+					"Detach destination field must be different from current field",
+				),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects detaching into an occupied detached field", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.create([singleJsonCursor(99)], detachedKey);
+			visitor.enterField(rootFieldKey);
+
+			assert.throws(
+				() => visitor.detach({ start: 1, end: 2 }, detachedKey, detachId, false),
+				validateAssertionError("Detach destination must be a new empty field"),
+			);
+			afterAssert(forest, visitor);
+		});
+
+		it("rejects destroying with a mismatched count", () => {
+			const forest = setupForest();
+			const visitor = forest.acquireVisitor();
+			visitor.create([singleJsonCursor(98), singleJsonCursor(99)], detachedKey);
+
+			assert.throws(
+				() => visitor.destroy(detachedKey, 1),
+				validateAssertionError("Destroy count must match field length"),
+			);
+			afterAssert(forest, visitor);
+		});
+	});
+
 	describe("can clone", () => {
 		it("an empty forest", () => {
 			const schema = new TreeStoredSchemaRepository();
@@ -473,12 +574,7 @@ export function testForest(config: ForestTestConfiguration): void {
 			const schema = new TreeStoredSchemaRepository(optionalArraySchema);
 			const forest = factory(schema);
 			const content: JsonCompatible[] = [1, true, "test"];
-			initializeForest(
-				forest,
-				fieldJsonCursor(content),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor(content));
 
 			const clone = forest.clone(schema);
 			const reader = clone.allocateCursor();
@@ -495,12 +591,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("multiple fields", () => {
 			const schema = new TreeStoredSchemaRepository(optionalArraySchema);
 			const forest = factory(schema);
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const clone = forest.clone(schema);
 			const reader = clone.allocateCursor();
@@ -513,12 +604,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("clone has an independent anchor set", () => {
 			const schema = new TreeStoredSchemaRepository(optionalArraySchema);
 			const forest = factory(schema);
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const clone = forest.clone(schema);
 
@@ -545,12 +631,7 @@ export function testForest(config: ForestTestConfiguration): void {
 			{ type: brand(booleanSchema.identifier), value: true },
 			{ type: brand(stringSchema.identifier), value: "test" },
 		];
-		initializeForest(
-			forest,
-			cursorForJsonableTreeField(content),
-			testRevisionTagCodec,
-			testIdCompressor,
-		);
+		initializeForest(forest, cursorForJsonableTreeField(content));
 
 		const clone = forest.clone(schema);
 		const mark: DeltaMark = { count: 1, detach: detachId };
@@ -574,7 +655,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		if (!config.skipCursorErrorCheck) {
 			it("ensures cursors are cleared before applying changes", () => {
 				const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-				initializeForest(forest, fieldJsonCursor([1]), testRevisionTagCodec, testIdCompressor);
+				initializeForest(forest, fieldJsonCursor([1]));
 				const cursor = forest.allocateCursor();
 				moveToDetachedField(forest, cursor);
 
@@ -585,7 +666,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 			it("ensures cursors created in events during delta processing are cleared", () => {
 				const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-				initializeForest(forest, fieldJsonCursor([1]), testRevisionTagCodec, testIdCompressor);
+				initializeForest(forest, fieldJsonCursor([1]));
 
 				const log: string[] = [];
 				forest.events.on("beforeChange", () => {
@@ -603,7 +684,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("beforeChange events", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(forest, fieldJsonCursor([1]), testRevisionTagCodec, testIdCompressor);
+			initializeForest(forest, fieldJsonCursor([1]));
 
 			const log: string[] = [];
 			forest.events.on("beforeChange", () => {
@@ -618,12 +699,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("set fields as remove and insert", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const setField: DeltaMark = {
 				count: 1,
@@ -656,12 +732,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("set fields as replace", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const setField: DeltaMark = {
 				count: 1,
@@ -695,12 +766,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("remove", () => {
 			const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 			const content: JsonCompatible[] = [1, 2];
-			initializeForest(
-				forest,
-				fieldJsonCursor(content),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor(content));
 
 			const mark: DeltaMark = {
 				count: 1,
@@ -720,12 +786,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("a skip", () => {
 			const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 			const content: JsonCompatible[] = [1, 2];
-			initializeForest(
-				forest,
-				fieldJsonCursor(content),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor(content));
 			const cursor = forest.allocateCursor();
 			moveToDetachedField(forest, cursor);
 			cursor.firstNode();
@@ -750,12 +811,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("insert", () => {
 			const forest = factory(new TreeStoredSchemaRepository(optionalArraySchema));
 			const content: JsonCompatible[] = [1, 2];
-			initializeForest(
-				forest,
-				fieldJsonCursor(content),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor(content));
 
 			const delta: DeltaFieldMap = new Map([
 				[rootFieldKey, { marks: [{ count: 1, attach: buildId }] }],
@@ -807,12 +863,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("move out and move in", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const moveId = { minor: 0 };
 			const moveOut: DeltaMark = {
@@ -845,12 +896,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		it("insert and modify", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
 			const content: JsonCompatible[] = [1, 2];
-			initializeForest(
-				forest,
-				fieldJsonCursor(content),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor(content));
 
 			const delta: DeltaFieldMap = new Map([
 				[rootFieldKey, { marks: [{ count: 1, attach: buildId }] }],
@@ -904,12 +950,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("modify and remove", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const moveId = { minor: 0 };
 			const mark: DeltaMark = {
@@ -932,12 +973,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		it("modify and move out", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 
 			const moveId = { minor: 0 };
 			const mark: DeltaMark = {
@@ -1022,12 +1058,7 @@ export function testForest(config: ForestTestConfiguration): void {
 				],
 			]);
 			const expected: JsonCompatible[] = [{ y: 1 }];
-			initializeForest(
-				forest,
-				fieldJsonCursor([nestedContent]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([nestedContent]));
 			applyTestDelta(delta, forest);
 			const readCursor = forest.allocateCursor();
 			moveToDetachedField(forest, readCursor);
@@ -1037,12 +1068,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		});
 		it("when moving the last node in the field", () => {
 			const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
-			initializeForest(
-				forest,
-				fieldJsonCursor([{ x: 2 }]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, fieldJsonCursor([{ x: 2 }]));
 			// Move from field x to y:
 			const moveId = { minor: 0 };
 			const moveOut: DeltaMark = {
@@ -1084,7 +1110,7 @@ export function testForest(config: ForestTestConfiguration): void {
 
 		const forest = factory(new TreeStoredSchemaRepository(jsonSequenceRootSchema));
 		const content: JsonCompatible[] = [1, 2];
-		initializeForest(forest, fieldJsonCursor(content), testRevisionTagCodec, testIdCompressor);
+		initializeForest(forest, fieldJsonCursor(content));
 
 		forest.registerAnnouncedVisitor(acquireVisitor);
 		const delta: DeltaFieldMap = new Map([
@@ -1106,12 +1132,7 @@ export function testForest(config: ForestTestConfiguration): void {
 		"forest cursor",
 		(data): ITreeCursor => {
 			const forest = factory(new TreeStoredSchemaRepository(toInitialSchema(testTreeSchema)));
-			initializeForest(
-				forest,
-				cursorForJsonableTreeField([data]),
-				testRevisionTagCodec,
-				testIdCompressor,
-			);
+			initializeForest(forest, cursorForJsonableTreeField([data]));
 			const cursor = forest.allocateCursor();
 			moveToDetachedField(forest, cursor);
 			assert(cursor.firstNode());
