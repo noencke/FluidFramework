@@ -189,6 +189,7 @@ export {
 	type RemoteChangeMetadata,
 	type ChangeMetadata,
 	type LabelTree,
+	type CustomMetadataTree,
 	type TransactionLabels,
 	type RevisionTag,
 	RevisionTagSchema,
@@ -203,6 +204,7 @@ export {
 	tagRollbackInverse,
 	SessionIdSchema,
 	mintCommit,
+	flattenCustomMetadata,
 	rebaseBranch,
 	type BranchRebaseResult,
 	rebaseChange,
@@ -237,4 +239,6 @@ export {
 	type RevertibleFactory,
 	type RevertibleAlphaFactory,
 	type RevertibleAlpha,
+	type RevertOptionsAlpha,
+	type RevertToOptionsAlpha,
 } from "./revertible.js";
