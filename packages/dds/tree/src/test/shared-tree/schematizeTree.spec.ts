@@ -41,7 +41,6 @@ import {
 	type TreeView,
 	type TreeViewConfiguration,
 	type TreeBranchHistory,
-	type UntypedTreeViewAlpha,
 } from "../../simple-tree/index.js";
 import { toInitialSchema } from "../../simple-tree/index.js";
 import { Breakable } from "../../util/index.js";

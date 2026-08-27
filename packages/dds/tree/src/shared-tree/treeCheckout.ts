@@ -11,11 +11,7 @@ import type {
 } from "@fluidframework/core-interfaces/internal";
 import { assert, unreachableCase, fail } from "@fluidframework/core-utils/internal";
 import type { IIdCompressor, StableId } from "@fluidframework/id-compressor";
-import {
-	type TelemetryLoggerExt,
-	UsageError,
-	tagCodeArtifacts,
-} from "@fluidframework/telemetry-utils/internal";
+import { type TelemetryLoggerExt, UsageError } from "@fluidframework/telemetry-utils/internal";
 
 import {
 	FluidClientVersion,
