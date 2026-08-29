@@ -43,6 +43,7 @@ export {
 export { SchemaFactoryBeta, type SchemaStaticsBeta } from "./schemaFactoryBeta.js";
 export {
 	SchemaFactoryAlpha,
+	type SchemaFactoryAlphaOptions,
 	type SchemaStaticsAlpha,
 	type NodeProvider,
 } from "./schemaFactoryAlpha.js";

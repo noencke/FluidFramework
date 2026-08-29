@@ -255,6 +255,7 @@ export {
 	RevertibleAlphaFactory, 
 	RunTransactionParamsAlpha, 
 	SchemaFactoryAlpha, 
+	SchemaFactoryAlphaOptions,
 	SchemaStaticsAlpha, 
 	SchemaType, 
 	SharedTreeAlpha, 
